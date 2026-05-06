@@ -3,6 +3,7 @@ name = "risper"
 version = "0.1.0"
 description = "Local-first Ubuntu dictation utility with durable recordings."
 requires-python = ">=3.11"
+license = "MIT"
 dependencies = []
 
 [project.scripts]

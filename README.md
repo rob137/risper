@@ -184,6 +184,10 @@ Risper is Ubuntu-first today, but the code now keeps desktop integration behind 
 
 Future macOS/Windows work should add platform adapters and recorder backends rather than changing the dictation/session/transcription flow.
 
+## License
+
+MIT. See `LICENSE`.
+
 ## Uninstall
 
 ```bash

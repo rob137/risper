@@ -17,10 +17,24 @@ class AudioLevelTests(unittest.TestCase):
 
         self.assertGreater(pcm16_rms_level(loud), pcm16_rms_level(quiet))
 
+    def test_maximum_pcm_clips_to_one(self) -> None:
+        maximum = struct.pack("<100h", *([32767] * 100))
+
+        self.assertAlmostEqual(pcm16_rms_level(maximum), 1.0, places=3)
+
+    def test_odd_trailing_byte_is_ignored(self) -> None:
+        one_sample = struct.pack("<h", 12000)
+
+        self.assertEqual(pcm16_rms_level(one_sample + b"x"), pcm16_rms_level(one_sample))
+
     def test_level_to_bars_is_stable_width(self) -> None:
         self.assertEqual(len(level_to_bars(0.0, width=8)), 8)
         self.assertEqual(len(level_to_bars(1.0, width=8)), 8)
         self.assertNotEqual(level_to_bars(0.0, width=8), level_to_bars(1.0, width=8))
+
+    def test_level_to_bars_clamps_extreme_inputs(self) -> None:
+        self.assertEqual(level_to_bars(-1.0, width=4), level_to_bars(0.0, width=4))
+        self.assertEqual(level_to_bars(2.0, width=4), level_to_bars(1.0, width=4))
 
 
 class OverlayStatusTests(unittest.TestCase):
