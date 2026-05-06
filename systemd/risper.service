@@ -1,0 +1,11 @@
+[Unit]
+Description=Risper user daemon
+
+[Service]
+Type=simple
+Environment=PYTHONPATH=__ROOT__/src
+ExecStart=/usr/bin/python3 -m risper.daemon
+Restart=on-failure
+
+[Install]
+WantedBy=default.target

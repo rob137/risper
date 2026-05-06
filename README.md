@@ -1,0 +1,194 @@
+# Risper
+
+Risper is a local-first Ubuntu dictation utility. It is built around durable session folders: recording creates the folder and metadata before audio capture starts, and failures leave recoverable files behind.
+
+Current state: phase 1/2 with a small daemon and CLI history. Recording, local transcription via whisper.cpp, session metadata, notifications, sounds, CLI history, and clipboard/paste plumbing are implemented.
+The recording overlay follows session state and shows a live microphone level when `pw-cat` is available.
+
+## Commands
+
+- `risper-toggle`: start recording, then stop recording on the next run.
+- `risper-daemon`: marks incomplete sessions recovered on startup and stays alive for systemd.
+- `risper-open`: opens recordings, last session, last transcript, last audio, config, or copies the last transcript.
+- `risper-history`: prints recent sessions and can open, play, copy, retranscribe, or delete a session by id.
+- `risper-retranscribe`: retranscribes a saved session by id, or the last session by default.
+- `risper-models`: lists, selects, and adds local transcription model profiles.
+- `risper-status`: opens the GTK control/history window.
+- `risper-benchmark`: measures transcription profile wall time, CPU use, and peak RSS.
+- `risper-diagnose`: prints OS, session, audio, command, and Python module checks.
+
+## Install
+
+```bash
+cd ~/personal/risper
+./install-user.sh
+```
+
+This creates wrappers in `~/.local/bin` and installs a reversible user service file. It does not use root and does not install dependencies.
+
+Optional daemon:
+
+```bash
+systemctl --user enable --now risper.service
+```
+
+Manual development run without installing:
+
+```bash
+cd ~/personal/risper
+PYTHONPATH=src python3 -m risper.diagnose
+PYTHONPATH=src python3 -m risper.toggle
+```
+
+## Verification
+
+```bash
+./scripts/test.sh
+./scripts/mutation-smoke.sh
+./scripts/mutmut.sh run
+```
+
+The mutation smoke deliberately breaks a copied version of the model-selection code and expects the tests to fail.
+For proper mutation testing options, see `docs/mutation-testing.md`.
+
+Performance measurements:
+
+```bash
+risper-benchmark last --profile whispercpp-base-en --profile parakeet-tdt-0-6b-v3
+```
+
+See `docs/performance.md`.
+
+## Configure
+
+The first run creates:
+
+```text
+~/.config/risper/config.toml
+```
+
+Important settings:
+
+```toml
+sessions_dir = "~/.local/share/risper/sessions"
+selected_model = "whispercpp-base-en"
+transcription_engine = "external"
+transcription_command = ""
+model = "base.en"
+language = "en"
+paste_mode = "auto"
+show_overlay = true
+play_sounds = true
+double_alt_enabled = false
+double_alt_window_ms = 350
+retention = "never"
+```
+
+Model profiles live in:
+
+```text
+~/.config/risper/models.toml
+```
+
+Each profile is just a local command with metadata. It can use placeholders:
+
+```text
+{audio} {raw} {raw_no_txt} {clean} {clean_no_txt} {model} {language}
+```
+
+Installed whisper.cpp shape:
+
+```toml
+transcription_engine = "whisper.cpp"
+transcription_command = "/home/robert-kirby/.local/share/risper/engines/whisper.cpp/build/bin/whisper-cli -m /home/robert-kirby/.local/share/risper/engines/whisper.cpp/models/ggml-base.en.bin -f {audio} -l {language} -nt -otxt -of {raw_no_txt}"
+```
+
+If the command writes `{raw}` or `{clean}` itself, Risper preserves those files. If it prints transcript text to stdout, Risper writes both `transcript.raw.txt` and `transcript.clean.txt`.
+
+List/select profiles:
+
+```bash
+risper-models list
+risper-models select whispercpp-base-en
+```
+
+Add another local backend profile:
+
+```bash
+risper-models add-external parakeet-local \
+  --engine parakeet \
+  --model parakeet-some-local-model \
+  --language en \
+  --command "/path/to/local-parakeet-wrapper --model {model} --audio {audio}" \
+  --select
+```
+
+The wrapper can either print transcript text to stdout or write `{raw}` directly. Risper does not care whether the backend is whisper.cpp, faster-whisper, Parakeet, or a future local engine as long as it is a local command.
+
+To install or refresh whisper.cpp locally:
+
+```bash
+cd ~/personal/risper
+./scripts/install-whispercpp.sh base.en
+```
+
+Parakeet profile template:
+
+```bash
+./scripts/add-parakeet-profile.sh
+risper-models list
+```
+
+This registers `nvidia/parakeet-tdt-0.6b-v3` through `scripts/parakeet-nemo-wrapper.py`. On this laptop the local NeMo/PyTorch environment has been installed, but whisper.cpp remains the default because it is much faster on CPU. See `docs/parakeet.md`.
+
+## Data
+
+Sessions are stored as:
+
+```text
+~/.local/share/risper/sessions/
+  2026-05-06_12-00-00/
+    audio.wav
+    transcript.raw.txt
+    transcript.clean.txt
+    metadata.json
+    status.log
+    error.log
+    pw-record.log
+```
+
+Recordings are never deleted automatically.
+
+## Shortcut
+
+Bind this command in GNOME Settings, Keyboard, View and Customize Shortcuts, Custom Shortcuts:
+
+```text
+risper-toggle
+```
+
+Double Alt is implemented as an optional Linux input-event listener in `risper-daemon`, but it is disabled by default. It needs read access to `/dev/input/event*`; on GNOME Wayland that usually means explicit input-group or udev-rule setup. See `docs/double-alt.md`.
+
+## Current Environment Findings
+
+- Ubuntu 24.04.4 LTS, GNOME 46, Wayland.
+- `pw-record`, `wl-copy`, `notify-send`, `gio`, GTK 3, and `canberra-gtk-play` are available.
+- `pactl`, `ffmpeg`, `xdotool`, `wtype`, `ydotool`, `dotool`, AppIndicator, `pip`, `faster-whisper`, and Python `whisper` are not available.
+- whisper.cpp and `ggml-base.en.bin` are installed under `~/.local/share/risper/engines`.
+- Paste on GNOME Wayland can use `wtype`, `dotool`, or `ydotool` if one is installed and permitted; otherwise it falls back to clipboard.
+- Tray/status indicator is not implemented because AppIndicator libraries are unavailable in the current Python environment.
+
+## Portability
+
+Risper is Ubuntu-first today, but the code now keeps desktop integration behind `src/risper/platforms/` and audio capture behind `src/risper/recorders.py`. See `docs/portability.md`.
+
+Future macOS/Windows work should add platform adapters and recorder backends rather than changing the dictation/session/transcription flow.
+
+## Uninstall
+
+```bash
+cd ~/personal/risper
+./uninstall-user.sh
+```
+
+Uninstall keeps config, state, recordings, and transcripts.

@@ -1,0 +1,7 @@
+[Desktop Entry]
+Type=Application
+Name=Risper History
+Comment=Open Risper controls and recent dictations
+Exec=__ROOT__/scripts/run-status-window.sh
+Terminal=false
+Categories=Utility;Audio;
