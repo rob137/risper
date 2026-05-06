@@ -97,6 +97,42 @@ command = "/bin/echo ok"
         profiles = load_profiles(config)
         self.assertEqual(set(profiles), {"valid"})
 
+    def test_invalid_model_table_does_not_stop_later_profiles(self) -> None:
+        config = load_config()
+        config.models_path.write_text(
+            """
+[models]
+broken = "not a table"
+
+[models.valid]
+engine = "ok"
+model = "ok-model"
+language = "en"
+command = "  /bin/echo ok  "
+""".lstrip(),
+            encoding="utf-8",
+        )
+
+        profiles = load_profiles(config)
+
+        self.assertEqual(set(profiles), {"valid"})
+        self.assertEqual(profiles["valid"].command, "/bin/echo ok")
+
+    def test_missing_command_key_is_ignored(self) -> None:
+        config = load_config()
+        config.models_path.write_text(
+            """
+[models.no-command]
+engine = "ignored"
+
+[models.valid]
+command = "/bin/echo ok"
+""".lstrip(),
+            encoding="utf-8",
+        )
+
+        self.assertEqual(set(load_profiles(config)), {"valid"})
+
     def test_select_profile_updates_config(self) -> None:
         select_profile("chosen")
 

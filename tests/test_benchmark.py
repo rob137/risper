@@ -48,6 +48,62 @@ class BenchmarkTests(unittest.TestCase):
         self.assertIn("cpu_percent", result)
         self.assertIn("max_rss_mb", result)
 
+    def test_run_profile_uses_backend_raw_file_before_stdout(self) -> None:
+        audio = self.root / "audio.wav"
+        script = self.root / "transcribe.py"
+        audio.write_bytes(b"fake audio")
+        script.write_text(
+            "import sys\n"
+            "from pathlib import Path\n"
+            "Path(sys.argv[1]).write_text('raw transcript from file\\n', encoding='utf-8')\n"
+            "print('stdout transcript')\n",
+            encoding="utf-8",
+        )
+        profile = ModelProfile("bench", "test", "test-model", "en", f"/usr/bin/python3 {script} {{raw}}")
+
+        result = _run_profile(profile, audio)
+
+        self.assertEqual(result["returncode"], 0)
+        self.assertEqual(result["transcript_chars"], len("raw transcript from file"))
+        self.assertEqual(result["transcript_preview"], "raw transcript from file")
+
+    def test_run_profile_uses_backend_clean_file_when_raw_missing(self) -> None:
+        audio = self.root / "audio.wav"
+        script = self.root / "transcribe.py"
+        audio.write_bytes(b"fake audio")
+        script.write_text(
+            "import sys\n"
+            "from pathlib import Path\n"
+            "Path(sys.argv[1]).write_text('clean transcript from file\\n', encoding='utf-8')\n",
+            encoding="utf-8",
+        )
+        profile = ModelProfile("bench", "test", "test-model", "en", f"/usr/bin/python3 {script} {{clean}}")
+
+        result = _run_profile(profile, audio)
+
+        self.assertEqual(result["returncode"], 0)
+        self.assertEqual(result["transcript_preview"], "clean transcript from file")
+
+    def test_run_profile_reports_failed_command_without_raising(self) -> None:
+        audio = self.root / "audio.wav"
+        script = self.root / "fail.py"
+        audio.write_bytes(b"fake audio")
+        script.write_text(
+            "import sys\n"
+            "sys.stderr.write('line 1\\nline 2\\nline 3\\nline 4\\nline 5\\nline 6\\n')\n"
+            "raise SystemExit(9)\n",
+            encoding="utf-8",
+        )
+        profile = ModelProfile("bench", "test-engine", "test-model", "cy", f"/usr/bin/python3 {script}")
+
+        result = _run_profile(profile, audio)
+
+        self.assertEqual(result["profile"], "bench")
+        self.assertEqual(result["engine"], "test-engine")
+        self.assertEqual(result["model"], "test-model")
+        self.assertEqual(result["returncode"], 9)
+        self.assertEqual(result["stderr_tail"], ["line 2", "line 3", "line 4", "line 5", "line 6"])
+
 
 if __name__ == "__main__":
     unittest.main()

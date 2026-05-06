@@ -5,9 +5,17 @@ import os
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from risper.config import load_config
-from risper.sessions import create_session, mark_incomplete_recordings_recovered, update_metadata
+from risper.sessions import (
+    all_sessions,
+    create_session,
+    find_session,
+    load_session,
+    mark_incomplete_recordings_recovered,
+    update_metadata,
+)
 from helpers import write_test_config
 
 
@@ -46,6 +54,33 @@ class SessionTests(unittest.TestCase):
         persisted = json.loads((session_dir / "metadata.json").read_text(encoding="utf-8"))
         self.assertEqual(persisted["session_id"], metadata["session_id"])
 
+    def test_create_session_metadata_matches_config_contract(self) -> None:
+        metadata = create_session(self.config)
+        session_dir = Path(metadata["audio_path"]).parent
+
+        self.assertEqual(metadata["session_id"], session_dir.name)
+        self.assertEqual(metadata["audio_path"], str(session_dir / "audio.wav"))
+        self.assertEqual(metadata["transcript_raw_path"], str(session_dir / "transcript.raw.txt"))
+        self.assertEqual(metadata["transcript_clean_path"], str(session_dir / "transcript.clean.txt"))
+        self.assertEqual(metadata["transcription_engine"], self.config.transcription_engine)
+        self.assertEqual(metadata["model"], self.config.model)
+        self.assertEqual(metadata["language"], self.config.language)
+        self.assertFalse(metadata["paste_attempted"])
+        self.assertFalse(metadata["paste_succeeded"])
+        self.assertEqual(metadata["target_app"], None)
+        self.assertEqual(metadata["errors"], [])
+        self.assertEqual((session_dir / "error.log").read_text(encoding="utf-8"), "")
+
+    def test_create_session_suffixes_colliding_session_ids(self) -> None:
+        with patch("risper.sessions.session_id_from_now", return_value="same-id"):
+            first = create_session(self.config)
+            second = create_session(self.config)
+            third = create_session(self.config)
+
+        self.assertEqual(first["session_id"], "same-id")
+        self.assertEqual(second["session_id"], "same-id-2")
+        self.assertEqual(third["session_id"], "same-id-3")
+
     def test_update_metadata_is_persisted(self) -> None:
         metadata = create_session(self.config)
         update_metadata(metadata, status="complete", paste_succeeded=True)
@@ -54,6 +89,40 @@ class SessionTests(unittest.TestCase):
         persisted = json.loads((session_dir / "metadata.json").read_text(encoding="utf-8"))
         self.assertEqual(persisted["status"], "complete")
         self.assertTrue(persisted["paste_succeeded"])
+
+    def test_load_session_handles_missing_and_invalid_metadata(self) -> None:
+        missing = self.root / "missing-session"
+        invalid = self.root / "invalid-session"
+        invalid.mkdir()
+        (invalid / "metadata.json").write_text("{not json", encoding="utf-8")
+
+        self.assertIsNone(load_session(missing))
+        self.assertIsNone(load_session(invalid))
+
+    def test_all_sessions_are_newest_first_and_ignore_bad_entries(self) -> None:
+        first = create_session(self.config)
+        second = create_session(self.config)
+        first_dir = Path(first["audio_path"]).parent
+        second_dir = Path(second["audio_path"]).parent
+        update_metadata(first, started_at="2026-01-01T00:00:00+00:00")
+        update_metadata(second, started_at="2026-01-02T00:00:00+00:00")
+        bad_dir = self.config.sessions_dir / "bad"
+        bad_dir.mkdir()
+        (bad_dir / "metadata.json").write_text("{bad json", encoding="utf-8")
+
+        sessions = all_sessions(self.config)
+
+        self.assertEqual([item["session_id"] for item in sessions], [second_dir.name, first_dir.name])
+
+    def test_find_session_supports_last_and_exact_id(self) -> None:
+        first = create_session(self.config)
+        second = create_session(self.config)
+        update_metadata(first, started_at="2026-01-01T00:00:00+00:00")
+        update_metadata(second, started_at="2026-01-02T00:00:00+00:00")
+
+        self.assertEqual(find_session(self.config, "last")["session_id"], second["session_id"])
+        self.assertEqual(find_session(self.config, first["session_id"])["session_id"], first["session_id"])
+        self.assertIsNone(find_session(self.config, "missing"))
 
     def test_incomplete_recording_is_marked_recovered(self) -> None:
         metadata = create_session(self.config)
@@ -64,7 +133,43 @@ class SessionTests(unittest.TestCase):
         session_dir = Path(metadata["audio_path"]).parent
         persisted = json.loads((session_dir / "metadata.json").read_text(encoding="utf-8"))
         self.assertEqual(persisted["status"], "recovered")
-        self.assertIn("Recovered incomplete recording", persisted["errors"][0])
+        self.assertEqual(
+            persisted["errors"][0],
+            "Recovered incomplete recording after startup; audio may be partial.",
+        )
+        self.assertIsNotNone(persisted["ended_at"])
+
+    def test_recovery_preserves_existing_errors_and_skips_finished_sessions(self) -> None:
+        recording = create_session(self.config)
+        complete = create_session(self.config)
+        update_metadata(recording, errors=["previous error"])
+        update_metadata(complete, status="complete")
+
+        count = mark_incomplete_recordings_recovered(self.config)
+
+        self.assertEqual(count, 1)
+        recovered = json.loads(Path(recording["audio_path"]).parent.joinpath("metadata.json").read_text(encoding="utf-8"))
+        finished = json.loads(Path(complete["audio_path"]).parent.joinpath("metadata.json").read_text(encoding="utf-8"))
+        self.assertEqual(recovered["errors"][0], "previous error")
+        self.assertEqual(
+            recovered["errors"][1],
+            "Recovered incomplete recording after startup; audio may be partial.",
+        )
+        self.assertEqual(finished["status"], "complete")
+        self.assertEqual(finished["errors"], [])
+
+    def test_recovery_handles_legacy_recording_without_errors_list(self) -> None:
+        metadata = create_session(self.config)
+        metadata.pop("errors")
+        update_metadata(metadata)
+
+        self.assertEqual(mark_incomplete_recordings_recovered(self.config), 1)
+
+        recovered = json.loads(Path(metadata["audio_path"]).parent.joinpath("metadata.json").read_text(encoding="utf-8"))
+        self.assertEqual(
+            recovered["errors"],
+            ["Recovered incomplete recording after startup; audio may be partial."],
+        )
 
 
 if __name__ == "__main__":

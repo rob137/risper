@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import tempfile
 import unittest
 from pathlib import Path
@@ -42,6 +43,17 @@ class SessionActionTests(unittest.TestCase):
 
     def test_transcript_path_returns_none_for_missing_paths(self) -> None:
         self.assertIsNone(transcript_path({"transcript_clean_path": "/missing", "transcript_raw_path": "/also-missing"}))
+
+    def test_transcript_path_ignores_absent_metadata_keys(self) -> None:
+        old_cwd = Path.cwd()
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "None").write_text("should not be used", encoding="utf-8")
+            os.chdir(root)
+            try:
+                self.assertIsNone(transcript_path({}))
+            finally:
+                os.chdir(old_cwd)
 
     def test_transcript_preview_compacts_whitespace_and_limits_text(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
