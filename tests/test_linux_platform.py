@@ -68,6 +68,19 @@ class LinuxPasteTests(unittest.TestCase):
         self.assertIn("wtype paste failed", message)
         self.assertIn("Compositor does not support", message)
 
+    def test_wayland_auto_uses_documented_ydotool_key_sequence(self) -> None:
+        platform = LinuxDesktopPlatform()
+        commands: list[list[str]] = []
+
+        with (
+            patch.object(platform, "session_type", return_value="wayland"),
+            patch.object(platform, "_command_path", side_effect=lambda name: name if name == "ydotool" else None),
+            patch.object(platform, "_run_checked", side_effect=lambda command, **kwargs: commands.append(command)),
+        ):
+            self.assertEqual(platform.attempt_paste("auto"), (True, "paste attempted with ydotool"))
+
+        self.assertEqual(commands, [["ydotool", "key", "ctrl+v"]])
+
     def test_command_path_falls_back_to_usr_bin_when_path_is_sparse(self) -> None:
         platform = LinuxDesktopPlatform()
 

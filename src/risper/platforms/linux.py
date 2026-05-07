@@ -90,7 +90,7 @@ class LinuxDesktopPlatform(DesktopPlatform):
             "xdotool": ["xdotool", "key", "--clearmodifiers", "ctrl+v"],
             "wtype": ["wtype", "-M", "ctrl", "-k", "v", "-m", "ctrl"],
             "dotool": ["dotool"],
-            "ydotool": ["ydotool", "key", "29:1", "47:1", "47:0", "29:0"],
+            "ydotool": ["ydotool", "key", "ctrl+v"],
         }
         missing: list[str] = []
         attempted: list[str] = []
