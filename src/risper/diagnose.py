@@ -5,6 +5,7 @@ import os
 import platform
 import shutil
 import subprocess
+import stat
 from pathlib import Path
 
 from .config import load_config
@@ -109,6 +110,15 @@ def _print_environment_diagnosis() -> int:
     print("Commands:")
     for command in desktop.diagnostic_commands():
         print(f"  {command:<18} {shutil.which(command) or '-'}")
+    print()
+    print("Paste automation:")
+    uinput = Path("/dev/uinput")
+    if uinput.exists():
+        details = uinput.stat()
+        print(f"  /dev/uinput       {stat.filemode(details.st_mode)} uid={details.st_uid} gid={details.st_gid}")
+    else:
+        print("  /dev/uinput       missing")
+    print(f"  ydotoold user     {_run(['systemctl', '--user', 'is-active', 'ydotoold.service']) or 'unknown'}")
     print()
     print(f"Python: {platform.python_version()}")
     for module in ["gi", "faster_whisper", "whisper", "sounddevice", "numpy"]:

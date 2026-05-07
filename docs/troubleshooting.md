@@ -38,6 +38,14 @@ The per-session `events.jsonl` file records the configured paste mode, session t
 
 If `wtype` is installed but the message says the compositor does not support the virtual keyboard protocol, GNOME Wayland is rejecting that paste route. The transcript is still on the clipboard.
 
+The current preferred fallback is `ydotool`, which uses Linux uinput instead of GNOME's virtual-keyboard protocol:
+
+```bash
+cd ~/personal/risper
+./scripts/setup-ydotool.sh
+risper-paste-test
+```
+
 ## Status Window Did Not Appear
 
 The daemon starts `risper-monitor`, a persistent GTK status process. It uses a normal window rather than a transient notification, but GNOME Wayland can still affect placement and visibility. Recording is independent of the status window.

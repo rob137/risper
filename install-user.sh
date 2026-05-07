@@ -23,6 +23,7 @@ make_wrapper risper risper.cli
 make_wrapper risper-toggle risper.toggle
 make_wrapper risper-daemon risper.daemon
 make_wrapper risper-open risper.open
+make_wrapper risper-paste-test risper.paste_test
 make_wrapper risper-history risper.history
 make_wrapper risper-monitor risper.monitor
 make_wrapper risper-retranscribe risper.retranscribe

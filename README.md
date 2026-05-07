@@ -11,6 +11,7 @@ The daemon starts a persistent GTK status monitor. During active dictation it sh
 - `risper-toggle`: start recording, then stop recording on the next run.
 - `risper-daemon`: marks incomplete sessions recovered on startup and stays alive for systemd.
 - `risper-open`: opens recordings, last session, last transcript, last audio, config, or copies the last transcript.
+- `risper-paste-test`: verifies paste helper behavior with a real focused GTK text field.
 - `risper-history`: prints recent sessions and can open, play, copy, retranscribe, or delete a session by id.
 - `risper-monitor`: runs the daemon-owned GTK status monitor for debugging.
 - `risper-retranscribe`: retranscribes a saved session by id, or the last session by default.
@@ -182,6 +183,13 @@ Double Alt is implemented as an optional Linux input-event listener in `risper-d
 - `pactl`, `ffmpeg`, `xdotool`, `ydotool`, `dotool`, AppIndicator, `pip`, `faster-whisper`, and Python `whisper` are not available.
 - whisper.cpp and `ggml-base.en.bin` are installed under `~/.local/share/risper/engines`.
 - Paste on GNOME Wayland can use `wtype`, `dotool`, or `ydotool` if one is installed and permitted by the compositor; otherwise it falls back to clipboard.
+  On this GNOME session, `wtype` is installed but rejected by the compositor, so `ydotool` is the preferred next paste route:
+
+```bash
+cd ~/personal/risper
+./scripts/setup-ydotool.sh
+risper-paste-test
+```
 - True tray indicator is not implemented because AppIndicator libraries are unavailable in the current Python environment. The GTK status monitor is the current fallback.
 
 ## Portability
