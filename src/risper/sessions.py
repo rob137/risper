@@ -9,6 +9,35 @@ from .platforms import current_platform
 from .util import atomic_write_json, session_id_from_now, utc_now_iso
 
 
+def events_path(metadata: dict[str, Any]) -> Path:
+    return session_dir(metadata) / "events.jsonl"
+
+
+def append_event(metadata: dict[str, Any], event: str, **fields: Any) -> None:
+    record = {
+        "timestamp": utc_now_iso(),
+        "event": event,
+        **fields,
+    }
+    path = events_path(metadata)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("a", encoding="utf-8") as handle:
+        handle.write(json.dumps(record, sort_keys=True, default=str) + "\n")
+
+
+def read_events(metadata: dict[str, Any], limit: int | None = None) -> list[dict[str, Any]]:
+    path = events_path(metadata)
+    if not path.exists():
+        return []
+    events: list[dict[str, Any]] = []
+    for line in path.read_text(encoding="utf-8").splitlines():
+        try:
+            events.append(json.loads(line))
+        except json.JSONDecodeError:
+            events.append({"event": "diagnostic.invalid_event_line", "raw": line})
+    return events[-limit:] if limit is not None else events
+
+
 def create_session(config: Config) -> dict[str, Any]:
     session_id = session_id_from_now()
     session_dir = config.sessions_dir / session_id
@@ -39,6 +68,15 @@ def create_session(config: Config) -> dict[str, Any]:
     atomic_write_json(session_dir / "metadata.json", metadata)
     (session_dir / "status.log").write_text(f"{utc_now_iso()} session created\n", encoding="utf-8")
     (session_dir / "error.log").touch()
+    append_event(
+        metadata,
+        "session.created",
+        session_id=metadata["session_id"],
+        session_type=metadata["session_type"],
+        audio_path=metadata["audio_path"],
+        paste_mode=config.paste_mode,
+        selected_model=config.selected_model,
+    )
     return metadata
 
 
@@ -103,6 +141,12 @@ def mark_incomplete_recordings_recovered(config: Config) -> int:
                 status="recovered",
                 ended_at=metadata.get("ended_at") or utc_now_iso(),
                 errors=errors,
+            )
+            append_event(
+                metadata,
+                "session.recovered",
+                status="recovered",
+                reason="incomplete recording found on startup",
             )
             count += 1
     return count

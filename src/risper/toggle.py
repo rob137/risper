@@ -10,7 +10,7 @@ from .config import load_config
 from .models import active_profile
 from .paste import attempt_paste
 from .recorder import current_recording, start_recording, stop_recording
-from .sessions import update_metadata
+from .sessions import append_event, update_metadata
 from .sounds import play
 from .transcriber import transcribe
 from .util import append_log, notify
@@ -30,11 +30,20 @@ def _finish_session(config, metadata: dict) -> int:
     error_log = session_dir / "error.log"
 
     if metadata.get("status") != "recorded":
+        append_event(metadata, "workflow.finish_rejected", status=metadata.get("status"))
         notify("Risper recording failed", "Audio was not captured cleanly; see session error log.")
         play(config, "error")
         return 1
 
     profile = active_profile(config)
+    append_event(
+        metadata,
+        "transcription.starting",
+        profile=profile.id,
+        engine=profile.engine,
+        model=profile.model,
+        language=profile.language,
+    )
     metadata = update_metadata(
         metadata,
         status="transcribing",
@@ -56,6 +65,7 @@ def _finish_session(config, metadata: dict) -> int:
         message = f"transcription failed: {exc}"
         append_log(error_log, message)
         append_log(status_log, message)
+        append_event(metadata, "transcription.failed", error=str(exc), error_type=exc.__class__.__name__)
         errors = list(metadata.get("errors", []))
         errors.append(message)
         update_metadata(metadata, status="failed", errors=errors)
@@ -63,8 +73,22 @@ def _finish_session(config, metadata: dict) -> int:
         play(config, "error")
         return 1
 
+    append_event(
+        metadata,
+        "transcription.completed",
+        raw_path=str(metadata["transcript_raw_path"]),
+        clean_path=str(metadata["transcript_clean_path"]),
+        transcript_chars=len(transcript),
+    )
     copied, clipboard_message = copy_text(transcript)
     append_log(status_log, clipboard_message)
+    append_event(
+        metadata,
+        "clipboard.copy",
+        ok=copied,
+        message=clipboard_message,
+        transcript_chars=len(transcript),
+    )
     if not copied:
         errors = list(metadata.get("errors", []))
         errors.append(clipboard_message)
@@ -74,8 +98,23 @@ def _finish_session(config, metadata: dict) -> int:
         return 1
 
     metadata = update_metadata(metadata, status="pasting", paste_attempted=True)
+    append_event(
+        metadata,
+        "paste.attempting",
+        mode=config.paste_mode,
+        session_type=metadata.get("session_type"),
+    )
     pasted, paste_message = attempt_paste(config)
     append_log(status_log, paste_message)
+    append_event(
+        metadata,
+        "paste.result",
+        ok=pasted,
+        mode=config.paste_mode,
+        session_type=metadata.get("session_type"),
+        message=paste_message,
+        confirmation="helper_returned_success" if pasted else "not_pasted_clipboard_retained",
+    )
     status = "complete" if pasted else "paste_failed"
     errors = list(metadata.get("errors", []))
     if not pasted:

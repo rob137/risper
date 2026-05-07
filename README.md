@@ -15,7 +15,7 @@ The recording overlay follows session state and shows a live microphone level wh
 - `risper-models`: lists, selects, and adds local transcription model profiles.
 - `risper-status`: opens the GTK control/history window.
 - `risper-benchmark`: measures transcription profile wall time, CPU use, and peak RSS.
-- `risper-diagnose`: prints OS, session, audio, command, and Python module checks.
+- `risper-diagnose`: prints OS checks, or `risper-diagnose last` for a compact session diagnostic.
 
 ## Install
 
@@ -152,9 +152,18 @@ Sessions are stored as:
     transcript.raw.txt
     transcript.clean.txt
     metadata.json
+    events.jsonl
     status.log
     error.log
     pw-record.log
+```
+
+`events.jsonl` is the structured debugging trail. It records workflow boundaries such as recorder start/stop, transcription, clipboard copy, paste attempt/result, and recovery. It does not store full transcript text by default.
+
+Inspect the latest session without dumping transcript contents:
+
+```bash
+risper-diagnose last
 ```
 
 Recordings are never deleted automatically.

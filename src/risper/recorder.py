@@ -7,7 +7,7 @@ from typing import Any
 
 from .config import Config
 from .recorders import default_recorder_backend
-from .sessions import create_session, update_metadata
+from .sessions import append_event, create_session, update_metadata
 from .util import append_log, atomic_write_json, pid_alive, read_json, utc_now_iso
 
 
@@ -45,6 +45,13 @@ def start_recording(config: Config) -> dict[str, Any]:
     audio_path = Path(str(metadata["audio_path"]))
     status_log = audio_path.parent / "status.log"
     append_log(status_log, f"starting recorder backend={backend.name}")
+    append_event(
+        metadata,
+        "recorder.starting",
+        backend=backend.name,
+        audio_path=str(audio_path),
+        stderr_path=str(audio_path.parent / backend.log_name),
+    )
 
     proc = backend.start(audio_path, audio_path.parent / backend.log_name)
     state = {
@@ -57,6 +64,7 @@ def start_recording(config: Config) -> dict[str, Any]:
     }
     atomic_write_json(config.current_state_path, state)
     append_log(status_log, f"{backend.name} pid={proc.pid}")
+    append_event(metadata, "recorder.started", backend=backend.name, pid=proc.pid)
     return state
 
 
@@ -66,10 +74,17 @@ def stop_recording(config: Config, state: dict[str, Any]) -> dict[str, Any]:
     pid = int(state["recorder_pid"])
     status_log = Path(str(state["session_dir"])) / "status.log"
     append_log(status_log, f"stopping recorder backend={state.get('recorder_backend', backend.name)} pid={pid}")
+    append_event(
+        metadata,
+        "recorder.stopping",
+        backend=str(state.get("recorder_backend", backend.name)),
+        pid=pid,
+    )
 
     backend.stop(pid)
     if pid_alive(pid):
         append_log(status_log, "recorder backend did not exit cleanly")
+        append_event(metadata, "recorder.stop_unclean", pid=pid)
 
     time.sleep(0.2)
     ended_at = utc_now_iso()
@@ -90,4 +105,12 @@ def stop_recording(config: Config, state: dict[str, Any]) -> dict[str, Any]:
     )
     config.current_state_path.unlink(missing_ok=True)
     append_log(status_log, f"recording stopped status={status}")
+    append_event(
+        metadata,
+        "recorder.stopped",
+        status=status,
+        audio_path=str(audio_path),
+        audio_bytes=audio_path.stat().st_size if audio_path.exists() else 0,
+        duration_seconds=metadata.get("duration_seconds"),
+    )
     return metadata

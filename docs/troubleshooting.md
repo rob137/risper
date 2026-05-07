@@ -28,6 +28,14 @@ risper-open last-session
 
 On GNOME Wayland, apps generally cannot inject text globally without a helper. Risper copies the transcript first and only then attempts paste, so the recovery path is normal paste from clipboard.
 
+Inspect the exact paste decision path for the latest session:
+
+```bash
+risper-diagnose last
+```
+
+The per-session `events.jsonl` file records the configured paste mode, session type, paste helper result, and whether Risper only confirmed helper launch rather than target-app insertion.
+
 ## Overlay Did Not Appear
 
 The overlay uses GTK 3. It is a best-effort small window and may be constrained by the compositor. Recording is independent of the overlay.

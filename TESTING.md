@@ -37,10 +37,11 @@ PYTHONPATH=src python3 -m risper.toggle
 Expected:
 
 - A session folder appears immediately under `~/.local/share/risper/sessions`.
-- `audio.wav`, `metadata.json`, `status.log`, `error.log`, and `pw-record.log` are present.
+- `audio.wav`, `metadata.json`, `events.jsonl`, `status.log`, `error.log`, and `pw-record.log` are present.
 - `audio.wav` should be playable.
 - Metadata status becomes `complete` or `paste_failed` after transcription.
 - `transcript.raw.txt` and `transcript.clean.txt` are created.
+- `events.jsonl` records recorder, transcription, clipboard, and paste boundary events without storing transcript text.
 - The audio remains available if transcription fails.
 - Start/stop notifications and sounds are attempted.
 - Overlay appears while recording if GTK can create a small Wayland window.
@@ -57,6 +58,12 @@ PYTHONPATH=src python3 -m risper.retranscribe last
 PYTHONPATH=src python3 -m risper.model_cli list
 PYTHONPATH=src python3 -m risper.status_window
 PYTHONPATH=src python3 -m risper.benchmark last --profile whispercpp-base-en --profile parakeet-tdt-0-6b-v3
+```
+
+Inspect the latest diagnostic trail:
+
+```bash
+PYTHONPATH=src python3 -m risper.diagnose last
 ```
 
 Parakeet profile check:

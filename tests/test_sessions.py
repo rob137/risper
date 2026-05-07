@@ -9,11 +9,14 @@ from unittest.mock import patch
 
 from risper.config import load_config
 from risper.sessions import (
+    append_event,
     all_sessions,
     create_session,
+    events_path,
     find_session,
     load_session,
     mark_incomplete_recordings_recovered,
+    read_events,
     update_metadata,
 )
 from helpers import write_test_config
@@ -47,12 +50,27 @@ class SessionTests(unittest.TestCase):
 
         self.assertTrue(session_dir.exists())
         self.assertTrue((session_dir / "metadata.json").exists())
+        self.assertTrue((session_dir / "events.jsonl").exists())
         self.assertTrue((session_dir / "status.log").exists())
         self.assertTrue((session_dir / "error.log").exists())
         self.assertEqual(metadata["status"], "recording")
 
         persisted = json.loads((session_dir / "metadata.json").read_text(encoding="utf-8"))
         self.assertEqual(persisted["session_id"], metadata["session_id"])
+        events = read_events(metadata)
+        self.assertEqual(events[0]["event"], "session.created")
+        self.assertEqual(events_path(metadata), session_dir / "events.jsonl")
+
+    def test_append_event_writes_json_lines_without_transcript_payloads(self) -> None:
+        metadata = create_session(self.config)
+
+        append_event(metadata, "paste.result", ok=False, message="no installed paste helper", transcript_chars=42)
+
+        events = read_events(metadata)
+        self.assertEqual(events[-1]["event"], "paste.result")
+        self.assertFalse(events[-1]["ok"])
+        self.assertEqual(events[-1]["transcript_chars"], 42)
+        self.assertNotIn("transcript", events[-1])
 
     def test_create_session_metadata_matches_config_contract(self) -> None:
         metadata = create_session(self.config)
