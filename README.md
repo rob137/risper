@@ -2,8 +2,8 @@
 
 Risper is a local-first Ubuntu dictation utility. It is built around durable session folders: recording creates the folder and metadata before audio capture starts, and failures leave recoverable files behind.
 
-Current state: phase 1/2 with a small daemon and CLI history. Recording, local transcription via whisper.cpp, session metadata, notifications, sounds, CLI history, and clipboard/paste plumbing are implemented.
-The daemon starts a persistent GTK status monitor. During active dictation it shows listening/transcribing/pasting state and a live microphone level when `pw-cat` is available.
+Current state: phase 1/2 with a small daemon and CLI history. Recording, local transcription via whisper.cpp, session metadata, notifications, sounds, CLI history, and clipboard copy are implemented.
+Risper deliberately leaves completed transcripts on the clipboard instead of trying to inject text into the focused app. On GNOME Wayland that path was not reliable enough to keep in the default workflow.
 
 ## Commands
 
@@ -11,9 +11,8 @@ The daemon starts a persistent GTK status monitor. During active dictation it sh
 - `risper-toggle`: start recording, then stop recording on the next run.
 - `risper-daemon`: marks incomplete sessions recovered on startup and stays alive for systemd.
 - `risper-open`: opens recordings, last session, last transcript, last audio, config, or copies the last transcript.
-- `risper-paste-test`: verifies paste helper behavior with a real focused GTK text field.
+- `risper-paste-test`: diagnostic helper for paste experiments with a real focused GTK text field.
 - `risper-history`: prints recent sessions and can open, play, copy, retranscribe, or delete a session by id.
-- `risper-monitor`: runs the daemon-owned GTK status monitor for debugging.
 - `risper-retranscribe`: retranscribes a saved session by id, or the last session by default.
 - `risper-models`: lists, selects, and adds local transcription model profiles.
 - `risper-status`: opens the GTK control/history window.
@@ -74,8 +73,8 @@ transcription_engine = "external"
 transcription_command = ""
 model = "base.en"
 language = "en"
-paste_mode = "auto"
-show_overlay = true
+paste_mode = "clipboard_only"
+show_overlay = false
 play_sounds = true
 double_alt_enabled = false
 double_alt_window_ms = 350
@@ -156,7 +155,7 @@ Sessions are stored as:
     pw-record.log
 ```
 
-`events.jsonl` is the structured debugging trail. It records workflow boundaries such as recorder start/stop, transcription, clipboard copy, paste attempt/result, status-window state changes, and recovery. It does not store full transcript text by default.
+`events.jsonl` is the structured debugging trail. It records workflow boundaries such as recorder start/stop, transcription, clipboard copy, skipped paste, and recovery. It does not store full transcript text by default.
 
 Inspect the latest session without dumping transcript contents:
 
@@ -182,15 +181,8 @@ Double Alt is implemented as an optional Linux input-event listener in `risper-d
 - `pw-record`, `wl-copy`, `wtype`, `notify-send`, `gio`, GTK 3, and `canberra-gtk-play` are available.
 - `pactl`, `ffmpeg`, `xdotool`, `ydotool`, `dotool`, AppIndicator, `pip`, `faster-whisper`, and Python `whisper` are not available.
 - whisper.cpp and `ggml-base.en.bin` are installed under `~/.local/share/risper/engines`.
-- Paste on GNOME Wayland can use `wtype`, `dotool`, or `ydotool` if one is installed and permitted by the compositor; otherwise it falls back to clipboard.
-  On this GNOME session, `wtype` is installed but rejected by the compositor, so `ydotool` is the preferred next paste route:
-
-```bash
-cd ~/personal/risper
-./scripts/setup-ydotool.sh
-risper-paste-test
-```
-- True tray indicator is not implemented because AppIndicator libraries are unavailable in the current Python environment. The GTK status monitor is the current fallback.
+- Automatic paste on GNOME Wayland was tested and removed from the default workflow because helper success did not reliably mean text appeared in the intended target. The transcript is copied to the clipboard instead.
+- True tray/status-window UI is not part of the default workflow. Ubuntu notifications and the GNOME microphone indicator provide the lightweight feedback.
 
 ## Portability
 

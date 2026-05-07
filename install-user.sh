@@ -25,12 +25,12 @@ make_wrapper risper-daemon risper.daemon
 make_wrapper risper-open risper.open
 make_wrapper risper-paste-test risper.paste_test
 make_wrapper risper-history risper.history
-make_wrapper risper-monitor risper.monitor
 make_wrapper risper-retranscribe risper.retranscribe
 make_wrapper risper-models risper.model_cli
 make_wrapper risper-status risper.status_window
 make_wrapper risper-benchmark risper.benchmark
 make_wrapper risper-diagnose risper.diagnose
+rm -f "${BIN_DIR}/risper-monitor"
 
 cp "${ROOT}/systemd/risper.service" "${SYSTEMD_DIR}/risper.service"
 sed -i "s|__ROOT__|${ROOT}|g" "${SYSTEMD_DIR}/risper.service"

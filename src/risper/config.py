@@ -52,9 +52,9 @@ transcription_engine = "external"
 transcription_command = ""
 model = "base.en"
 language = "en"
-paste_mode = "auto" # auto | clipboard_only | xdotool | wtype | ydotool | dotool
-# Controls the daemon-owned GTK status window.
-show_overlay = true
+paste_mode = "clipboard_only" # clipboard_only | auto | xdotool | wtype | ydotool | dotool
+# The daemon no longer starts a standalone status window.
+show_overlay = false
 play_sounds = true
 double_alt_enabled = false
 double_alt_window_ms = 350
@@ -103,9 +103,9 @@ def load_config() -> Config:
     state_dir.mkdir(parents=True, exist_ok=True)
     sessions_dir.mkdir(parents=True, exist_ok=True)
 
-    paste_mode = str(raw.get("paste_mode", "auto"))
+    paste_mode = str(raw.get("paste_mode", "clipboard_only"))
     if paste_mode not in {"auto", "clipboard_only", "xdotool", "wtype", "ydotool", "dotool"}:
-        paste_mode = "auto"
+        paste_mode = "clipboard_only"
     double_alt_window_ms = int(raw.get("double_alt_window_ms", 350))
     if double_alt_window_ms < 100:
         double_alt_window_ms = 100
@@ -124,7 +124,7 @@ def load_config() -> Config:
         model=str(raw.get("model", "base.en")),
         language=str(raw.get("language", "en")),
         paste_mode=paste_mode,
-        show_overlay=bool(raw.get("show_overlay", True)),
+        show_overlay=bool(raw.get("show_overlay", False)),
         play_sounds=bool(raw.get("play_sounds", True)),
         double_alt_enabled=bool(raw.get("double_alt_enabled", False)),
         double_alt_window_ms=double_alt_window_ms,

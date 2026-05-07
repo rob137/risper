@@ -24,43 +24,29 @@ The recording is still saved. Open the last session with:
 risper-open last-session
 ```
 
-## Paste Failed
+## Clipboard And Paste
 
-On GNOME Wayland, apps generally cannot inject text globally without a helper. Risper copies the transcript first and only then attempts paste, so the recovery path is normal paste from clipboard.
+On GNOME Wayland, apps generally cannot inject text globally without a helper. Risper therefore copies the transcript to the clipboard and does not attempt automatic paste during normal dictation.
 
-Inspect the exact paste decision path for the latest session:
+Inspect the latest session:
 
 ```bash
 risper-diagnose last
 ```
 
-The per-session `events.jsonl` file records the configured paste mode, session type, paste helper result, and whether Risper only confirmed helper launch rather than target-app insertion.
+The per-session `events.jsonl` file records clipboard copy and the skipped-paste decision.
 
-`paste_attempted` means a helper such as `ydotool` exited successfully, but target-app insertion was not verified. The transcript remains on the clipboard.
+Older sessions may contain `paste_attempted`. That means a helper such as `ydotool` exited successfully, but target-app insertion was not verified. The transcript remained on the clipboard.
 
-If `wtype` is installed but the message says the compositor does not support the virtual keyboard protocol, GNOME Wayland is rejecting that paste route. The transcript is still on the clipboard.
-
-The current preferred fallback is `ydotool`, which uses Linux uinput instead of GNOME's virtual-keyboard protocol:
+The old paste verification harness is still available for experiments:
 
 ```bash
-cd ~/personal/risper
-./scripts/setup-ydotool.sh
 risper-paste-test
 ```
 
-## Status Window Did Not Appear
+## Status Feedback
 
-The daemon starts `risper-monitor`, a persistent GTK status process. It is configured as a non-focusable notification-style window, but GNOME Wayland can still affect placement and visibility. Recording is independent of the status window.
-
-Inspect the UI lifecycle trail:
-
-```bash
-risper-diagnose last
-tail -n 40 ~/.local/state/risper/risper.log
-tail -n 40 ~/.local/state/risper/status-window.stderr.log
-```
-
-Useful lines include `status-window process started`, `status_window.started`, `status_window.show_requested`, `status_window.mapped`, and `status_window.state_changed`.
+Risper no longer starts a standalone status window during dictation. Ubuntu notifications and the GNOME microphone indicator are the intended lightweight feedback. Recording and transcription details are still logged in the session folder and `~/.local/state/risper/risper.log`.
 
 ## Daemon Is Not Running
 

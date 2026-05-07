@@ -39,15 +39,12 @@ Expected:
 - A session folder appears immediately under `~/.local/share/risper/sessions`.
 - `audio.wav`, `metadata.json`, `events.jsonl`, `status.log`, `error.log`, and `pw-record.log` are present.
 - `audio.wav` should be playable.
-- Metadata status becomes `complete`, `paste_attempted`, or `paste_failed` after transcription.
+- Metadata status becomes `complete` after successful transcription and clipboard copy.
 - `transcript.raw.txt` and `transcript.clean.txt` are created.
-- `events.jsonl` records recorder, transcription, clipboard, and paste boundary events without storing transcript text.
+- `events.jsonl` records recorder, transcription, clipboard, and skipped-paste boundary events without storing transcript text.
 - The audio remains available if transcription fails.
 - Start/stop notifications and sounds are attempted.
-- The daemon-owned status monitor appears while recording/transcribing/pasting if GTK can create a normal Wayland window.
-- The status monitor shows a live mic-level bar when `pw-cat` can sample the microphone.
-- The status monitor should not take keyboard focus from the target app.
-- The status monitor logs `status_window.*` lifecycle and state-change lines in `~/.local/state/risper/risper.log`.
+- No daemon-owned status window should appear during dictation.
 
 History:
 
@@ -58,7 +55,6 @@ PYTHONPATH=src python3 -m risper.open last-session
 PYTHONPATH=src python3 -m risper.retranscribe last
 PYTHONPATH=src python3 -m risper.model_cli list
 PYTHONPATH=src python3 -m risper.status_window
-PYTHONPATH=src python3 -m risper.monitor
 PYTHONPATH=src python3 -m risper.paste_test
 PYTHONPATH=src python3 -m risper.benchmark last --profile whispercpp-base-en --profile parakeet-tdt-0-6b-v3
 ```
@@ -88,6 +84,6 @@ The daemon should mark any still-`recording` sessions as `recovered`.
 
 Still environment-limited:
 
-- Paste into arbitrary Wayland apps unless `wtype`, `dotool`, or `ydotool` is installed and permitted.
-- True tray indicator, because AppIndicator libraries are unavailable. The GTK status window is the current fallback.
+- Automatic paste into arbitrary Wayland apps.
+- True tray indicator or standalone recording window. Ubuntu notifications and the GNOME microphone indicator are the current feedback path.
 - Double Alt unless `double_alt_enabled = true` and the daemon has read access to `/dev/input/event*`.

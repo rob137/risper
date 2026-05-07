@@ -10,7 +10,7 @@ from unittest.mock import patch
 from helpers import write_test_config
 from risper.config import load_config
 from risper.models import ModelProfile
-from risper.sessions import create_session, update_metadata
+from risper.sessions import create_session, read_events, update_metadata
 from risper.toggle import _finish_session
 
 
@@ -36,7 +36,7 @@ class ToggleFinishTests(unittest.TestCase):
                 os.environ[key] = value
         self.tempdir.cleanup()
 
-    def test_helper_success_is_recorded_as_unverified_paste_attempt(self) -> None:
+    def test_finish_copies_transcript_without_attempting_paste(self) -> None:
         metadata = update_metadata(create_session(self.config), status="recorded")
         Path(str(metadata["audio_path"])).write_bytes(b"audio")
 
@@ -47,7 +47,6 @@ class ToggleFinishTests(unittest.TestCase):
             ),
             patch("risper.toggle.transcribe", return_value="hello"),
             patch("risper.toggle.copy_text", return_value=(True, "copied")),
-            patch("risper.toggle.attempt_paste", return_value=(True, "paste attempted with ydotool")),
             patch("risper.toggle.notify"),
             patch("risper.toggle.play"),
         ):
@@ -55,11 +54,12 @@ class ToggleFinishTests(unittest.TestCase):
 
         self.assertEqual(code, 0)
         persisted = json.loads(Path(str(metadata["audio_path"])).parent.joinpath("metadata.json").read_text())
-        self.assertEqual(persisted["status"], "paste_attempted")
-        self.assertTrue(persisted["paste_attempted"])
-        self.assertTrue(persisted["paste_helper_succeeded"])
+        self.assertEqual(persisted["status"], "complete")
+        self.assertFalse(persisted["paste_attempted"])
+        self.assertFalse(persisted["paste_helper_succeeded"])
         self.assertFalse(persisted["paste_succeeded"])
-        self.assertEqual(persisted["paste_confirmation"], "helper_returned_success_target_unverified")
+        self.assertEqual(persisted["paste_confirmation"], "not_attempted_automatic_paste_disabled")
+        self.assertEqual(read_events(metadata)[-1]["event"], "paste.skipped")
 
 
 if __name__ == "__main__":

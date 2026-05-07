@@ -68,7 +68,6 @@ def _print_session_diagnosis(session_id: str) -> int:
         ("error log", root / "error.log"),
         ("recorder log", root / "pw-record.log"),
         ("daemon log", config.log_path),
-        ("status stderr", config.state_dir / "status-window.stderr.log"),
     ]:
         size = path.stat().st_size if path.exists() else 0
         print(f"  {label:<16} {'yes' if path.exists() else 'no ':<3} {size:>9}  {path}")
@@ -88,10 +87,6 @@ def _print_session_diagnosis(session_id: str) -> int:
     print()
     print("Daemon log tail:")
     for line in _tail(config.log_path, lines=12):
-        print(f"  {line}")
-    print()
-    print("Status window stderr tail:")
-    for line in _tail(config.state_dir / "status-window.stderr.log"):
         print(f"  {line}")
     return 0
 
