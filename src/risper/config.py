@@ -53,6 +53,7 @@ transcription_command = ""
 model = "base.en"
 language = "en"
 paste_mode = "auto" # auto | clipboard_only | xdotool | wtype | ydotool | dotool
+# Controls the daemon-owned GTK status window.
 show_overlay = true
 play_sounds = true
 double_alt_enabled = false

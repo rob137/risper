@@ -44,9 +44,9 @@ Expected:
 - `events.jsonl` records recorder, transcription, clipboard, and paste boundary events without storing transcript text.
 - The audio remains available if transcription fails.
 - Start/stop notifications and sounds are attempted.
-- Overlay appears while recording if GTK can create a small Wayland window.
-- Overlay shows a live mic-level bar when `pw-cat` can sample the microphone.
-- Overlay changes state during transcription and briefly shows completion/failure.
+- The daemon-owned status monitor appears while recording/transcribing/pasting if GTK can create a normal Wayland window.
+- The status monitor shows a live mic-level bar when `pw-cat` can sample the microphone.
+- The status monitor logs `status_window.*` lifecycle and state-change lines in `~/.local/state/risper/risper.log`.
 
 History:
 
@@ -57,6 +57,7 @@ PYTHONPATH=src python3 -m risper.open last-session
 PYTHONPATH=src python3 -m risper.retranscribe last
 PYTHONPATH=src python3 -m risper.model_cli list
 PYTHONPATH=src python3 -m risper.status_window
+PYTHONPATH=src python3 -m risper.monitor
 PYTHONPATH=src python3 -m risper.benchmark last --profile whispercpp-base-en --profile parakeet-tdt-0-6b-v3
 ```
 
@@ -86,6 +87,5 @@ The daemon should mark any still-`recording` sessions as `recovered`.
 Still environment-limited:
 
 - Paste into arbitrary Wayland apps unless `wtype`, `dotool`, or `ydotool` is installed and permitted.
-- Tray/status menu, because AppIndicator libraries are unavailable.
 - True tray indicator, because AppIndicator libraries are unavailable. The GTK status window is the current fallback.
 - Double Alt unless `double_alt_enabled = true` and the daemon has read access to `/dev/input/event*`.

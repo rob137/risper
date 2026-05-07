@@ -12,6 +12,7 @@ risper-toggle = "risper.toggle:main"
 risper-daemon = "risper.daemon:main"
 risper-open = "risper.open:main"
 risper-history = "risper.history:main"
+risper-monitor = "risper.monitor:main"
 risper-retranscribe = "risper.retranscribe:main"
 risper-models = "risper.model_cli:main"
 risper-status = "risper.status_window:main"
@@ -37,6 +38,7 @@ do_not_mutate = [
   "src/risper/diagnose.py",
   "src/risper/history.py",
   "src/risper/model_cli.py",
+  "src/risper/monitor.py",
   "src/risper/open.py",
   "src/risper/overlay.py",
   "src/risper/paste.py",

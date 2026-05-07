@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import subprocess
 import sys
 from pathlib import Path
 
@@ -14,14 +13,6 @@ from .sessions import append_event, update_metadata
 from .sounds import play
 from .transcriber import transcribe
 from .util import append_log, notify
-
-
-def _launch_overlay(recorder_pid: int, session_dir: str) -> None:
-    subprocess.Popen(
-        [sys.executable, "-m", "risper.overlay", str(recorder_pid), session_dir],
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
-    )
 
 
 def _finish_session(config, metadata: dict) -> int:
@@ -151,8 +142,6 @@ def main() -> int:
         play(config, "error")
         return 1
 
-    if config.show_overlay:
-        _launch_overlay(int(state["recorder_pid"]), str(state["session_dir"]))
     notify("Risper listening", "Run risper-toggle again to stop.")
     play(config, "start")
     print(f"Risper {__version__}: recording {state['session_dir']}")

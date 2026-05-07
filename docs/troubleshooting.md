@@ -36,9 +36,19 @@ risper-diagnose last
 
 The per-session `events.jsonl` file records the configured paste mode, session type, paste helper result, and whether Risper only confirmed helper launch rather than target-app insertion.
 
-## Overlay Did Not Appear
+## Status Window Did Not Appear
 
-The overlay uses GTK 3. It is a best-effort small window and may be constrained by the compositor. Recording is independent of the overlay.
+The daemon starts `risper-monitor`, a persistent GTK status process. It uses a normal window rather than a transient notification, but GNOME Wayland can still affect placement and visibility. Recording is independent of the status window.
+
+Inspect the UI lifecycle trail:
+
+```bash
+risper-diagnose last
+tail -n 40 ~/.local/state/risper/risper.log
+tail -n 40 ~/.local/state/risper/status-window.stderr.log
+```
+
+Useful lines include `status-window process started`, `status_window.started`, `status_window.show_requested`, `status_window.mapped`, and `status_window.state_changed`.
 
 ## Daemon Is Not Running
 

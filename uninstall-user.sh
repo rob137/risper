@@ -2,10 +2,12 @@
 set -euo pipefail
 
 systemctl --user disable --now risper.service 2>/dev/null || true
+rm -f "${HOME}/.local/bin/risper"
 rm -f "${HOME}/.local/bin/risper-toggle"
 rm -f "${HOME}/.local/bin/risper-daemon"
 rm -f "${HOME}/.local/bin/risper-open"
 rm -f "${HOME}/.local/bin/risper-history"
+rm -f "${HOME}/.local/bin/risper-monitor"
 rm -f "${HOME}/.local/bin/risper-retranscribe"
 rm -f "${HOME}/.local/bin/risper-models"
 rm -f "${HOME}/.local/bin/risper-status"

@@ -3,7 +3,7 @@
 Risper is a local-first Ubuntu dictation utility. It is built around durable session folders: recording creates the folder and metadata before audio capture starts, and failures leave recoverable files behind.
 
 Current state: phase 1/2 with a small daemon and CLI history. Recording, local transcription via whisper.cpp, session metadata, notifications, sounds, CLI history, and clipboard/paste plumbing are implemented.
-The recording overlay follows session state and shows a live microphone level when `pw-cat` is available.
+The daemon starts a persistent GTK status monitor. During active dictation it shows listening/transcribing/pasting state and a live microphone level when `pw-cat` is available.
 
 ## Commands
 
@@ -12,6 +12,7 @@ The recording overlay follows session state and shows a live microphone level wh
 - `risper-daemon`: marks incomplete sessions recovered on startup and stays alive for systemd.
 - `risper-open`: opens recordings, last session, last transcript, last audio, config, or copies the last transcript.
 - `risper-history`: prints recent sessions and can open, play, copy, retranscribe, or delete a session by id.
+- `risper-monitor`: runs the daemon-owned GTK status monitor for debugging.
 - `risper-retranscribe`: retranscribes a saved session by id, or the last session by default.
 - `risper-models`: lists, selects, and adds local transcription model profiles.
 - `risper-status`: opens the GTK control/history window.
@@ -154,7 +155,7 @@ Sessions are stored as:
     pw-record.log
 ```
 
-`events.jsonl` is the structured debugging trail. It records workflow boundaries such as recorder start/stop, transcription, clipboard copy, paste attempt/result, and recovery. It does not store full transcript text by default.
+`events.jsonl` is the structured debugging trail. It records workflow boundaries such as recorder start/stop, transcription, clipboard copy, paste attempt/result, status-window state changes, and recovery. It does not store full transcript text by default.
 
 Inspect the latest session without dumping transcript contents:
 
@@ -177,11 +178,11 @@ Double Alt is implemented as an optional Linux input-event listener in `risper-d
 ## Current Environment Findings
 
 - Ubuntu 24.04.4 LTS, GNOME 46, Wayland.
-- `pw-record`, `wl-copy`, `notify-send`, `gio`, GTK 3, and `canberra-gtk-play` are available.
-- `pactl`, `ffmpeg`, `xdotool`, `wtype`, `ydotool`, `dotool`, AppIndicator, `pip`, `faster-whisper`, and Python `whisper` are not available.
+- `pw-record`, `wl-copy`, `wtype`, `notify-send`, `gio`, GTK 3, and `canberra-gtk-play` are available.
+- `pactl`, `ffmpeg`, `xdotool`, `ydotool`, `dotool`, AppIndicator, `pip`, `faster-whisper`, and Python `whisper` are not available.
 - whisper.cpp and `ggml-base.en.bin` are installed under `~/.local/share/risper/engines`.
 - Paste on GNOME Wayland can use `wtype`, `dotool`, or `ydotool` if one is installed and permitted; otherwise it falls back to clipboard.
-- Tray/status indicator is not implemented because AppIndicator libraries are unavailable in the current Python environment.
+- True tray indicator is not implemented because AppIndicator libraries are unavailable in the current Python environment. The GTK status monitor is the current fallback.
 
 ## Portability
 
