@@ -36,6 +36,8 @@ risper-diagnose last
 
 The per-session `events.jsonl` file records the configured paste mode, session type, paste helper result, and whether Risper only confirmed helper launch rather than target-app insertion.
 
+If `wtype` is installed but the message says the compositor does not support the virtual keyboard protocol, GNOME Wayland is rejecting that paste route. The transcript is still on the clipboard.
+
 ## Status Window Did Not Appear
 
 The daemon starts `risper-monitor`, a persistent GTK status process. It uses a normal window rather than a transient notification, but GNOME Wayland can still affect placement and visibility. Recording is independent of the status window.

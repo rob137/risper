@@ -16,7 +16,7 @@ class LinuxPasteTests(unittest.TestCase):
             patch.object(platform, "session_type", return_value="wayland"),
             patch.object(platform, "_command_exists", side_effect=lambda name: name == "wtype"),
             patch.object(platform, "_command_path", side_effect=lambda name: name if name == "wtype" else None),
-            patch("risper.platforms.linux.subprocess.run", side_effect=lambda command, **kwargs: commands.append(command)),
+            patch.object(platform, "_run_checked", side_effect=lambda command, **kwargs: commands.append(command)),
         ):
             self.assertEqual(platform.attempt_paste("auto"), (True, "paste attempted with wtype"))
 
@@ -34,7 +34,7 @@ class LinuxPasteTests(unittest.TestCase):
         with (
             patch.object(platform, "session_type", return_value="wayland"),
             patch.object(platform, "_command_path", side_effect=lambda name: name if name in {"wtype", "dotool"} else None),
-            patch("risper.platforms.linux.subprocess.run", side_effect=fake_run),
+            patch.object(platform, "_run_checked", side_effect=fake_run),
         ):
             self.assertEqual(platform.attempt_paste("auto"), (True, "paste attempted with dotool"))
 
@@ -45,6 +45,28 @@ class LinuxPasteTests(unittest.TestCase):
 
         with patch.object(platform, "_command_path", return_value=None):
             self.assertEqual(platform.attempt_paste("wtype"), (False, "wtype is not installed"))
+
+    def test_auto_reports_installed_helper_failure_before_missing_fallbacks(self) -> None:
+        platform = LinuxDesktopPlatform()
+
+        with (
+            patch.object(platform, "session_type", return_value="wayland"),
+            patch.object(platform, "_command_path", side_effect=lambda name: name if name == "wtype" else None),
+            patch.object(
+                platform,
+                "_run_checked",
+                side_effect=subprocess.CalledProcessError(
+                    1,
+                    ["wtype"],
+                    output="Compositor does not support the virtual keyboard protocol\n",
+                ),
+            ),
+        ):
+            ok, message = platform.attempt_paste("auto")
+
+        self.assertFalse(ok)
+        self.assertIn("wtype paste failed", message)
+        self.assertIn("Compositor does not support", message)
 
     def test_command_path_falls_back_to_usr_bin_when_path_is_sparse(self) -> None:
         platform = LinuxDesktopPlatform()

@@ -4,6 +4,7 @@ import os
 import shutil
 import subprocess
 from pathlib import Path
+from typing import Any
 
 from .base import DesktopPlatform
 
@@ -58,6 +59,24 @@ class LinuxDesktopPlatform(DesktopPlatform):
             return ["wtype", "dotool", "ydotool"]
         return ["dotool", "ydotool", "wtype"]
 
+    def _run_checked(self, command: list[str], **kwargs: Any) -> None:
+        kwargs.setdefault("text", True)
+        subprocess.run(
+            command,
+            check=True,
+            timeout=5,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            **kwargs,
+        )
+
+    def _command_failure(self, exc: Exception) -> str:
+        if isinstance(exc, subprocess.CalledProcessError):
+            output = str(exc.stdout or exc.output or "").strip()
+            if output:
+                return output
+        return str(exc)
+
     def attempt_paste(self, mode: str) -> tuple[bool, str]:
         if mode == "clipboard_only":
             return False, "paste disabled by paste_mode=clipboard_only"
@@ -74,6 +93,7 @@ class LinuxDesktopPlatform(DesktopPlatform):
             "ydotool": ["ydotool", "key", "29:1", "47:1", "47:0", "29:0"],
         }
         missing: list[str] = []
+        attempted: list[str] = []
         last_error = "no safe paste helper available; transcript remains on clipboard"
         for selected in candidates:
             command = commands.get(selected)
@@ -83,22 +103,24 @@ class LinuxDesktopPlatform(DesktopPlatform):
             command_path = self._command_path(command[0])
             if not command_path:
                 missing.append(selected)
-                last_error = f"{selected} is not installed"
+                if not attempted:
+                    last_error = f"{selected} is not installed"
                 continue
             command = [command_path, *command[1:]]
+            attempted.append(selected)
 
             try:
                 if selected == "dotool":
-                    subprocess.run(command, input="key ctrl+v\n", text=True, check=True, timeout=5)
+                    self._run_checked(command, input="key ctrl+v\n", text=True)
                 else:
-                    subprocess.run(command, check=True, timeout=5)
+                    self._run_checked(command)
                 return True, f"paste attempted with {selected}"
             except Exception as exc:
-                last_error = f"{selected} paste failed: {exc}"
+                last_error = f"{selected} paste failed: {self._command_failure(exc)}"
                 if mode != "auto":
                     return False, last_error
 
-        if mode == "auto" and missing:
+        if mode == "auto" and missing and not attempted:
             return False, f"no installed paste helper from: {', '.join(candidates)}"
         return False, last_error
 
