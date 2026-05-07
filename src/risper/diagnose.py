@@ -51,6 +51,8 @@ def _print_session_diagnosis(session_id: str) -> int:
     print(f"language             {metadata.get('language')}")
     print(f"paste_attempted      {metadata.get('paste_attempted')}")
     print(f"paste_succeeded      {metadata.get('paste_succeeded')}")
+    print(f"paste_helper_ok      {metadata.get('paste_helper_succeeded')}")
+    print(f"paste_confirmation   {metadata.get('paste_confirmation')}")
     print(f"errors               {len(metadata.get('errors') or [])}")
     for error in metadata.get("errors") or []:
         print(f"  - {error}")

@@ -97,6 +97,7 @@ def _finish_session(config, metadata: dict) -> int:
     )
     pasted, paste_message = attempt_paste(config)
     append_log(status_log, paste_message)
+    confirmation = "helper_returned_success_target_unverified" if pasted else "not_pasted_clipboard_retained"
     append_event(
         metadata,
         "paste.result",
@@ -104,9 +105,9 @@ def _finish_session(config, metadata: dict) -> int:
         mode=config.paste_mode,
         session_type=metadata.get("session_type"),
         message=paste_message,
-        confirmation="helper_returned_success" if pasted else "not_pasted_clipboard_retained",
+        confirmation=confirmation,
     )
-    status = "complete" if pasted else "paste_failed"
+    status = "paste_attempted" if pasted else "paste_failed"
     errors = list(metadata.get("errors", []))
     if not pasted:
         errors.append(paste_message)
@@ -115,11 +116,13 @@ def _finish_session(config, metadata: dict) -> int:
         metadata,
         status=status,
         paste_attempted=True,
-        paste_succeeded=pasted,
+        paste_helper_succeeded=pasted,
+        paste_succeeded=False,
+        paste_confirmation=confirmation,
         errors=errors,
     )
     if pasted:
-        notify("Risper complete", "Transcript copied and paste attempted.")
+        notify("Risper copied", "Paste was attempted; transcript remains on clipboard.")
     else:
         notify("Risper copied", "Paste was unavailable; transcript is on the clipboard.")
     play(config, "stop")

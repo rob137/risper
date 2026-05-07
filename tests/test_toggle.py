@@ -1,0 +1,66 @@
+from __future__ import annotations
+
+import json
+import os
+import tempfile
+import unittest
+from pathlib import Path
+from unittest.mock import patch
+
+from helpers import write_test_config
+from risper.config import load_config
+from risper.models import ModelProfile
+from risper.sessions import create_session, update_metadata
+from risper.toggle import _finish_session
+
+
+class ToggleFinishTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.tempdir = tempfile.TemporaryDirectory()
+        self.root = Path(self.tempdir.name)
+        self.old_env = {
+            key: os.environ.get(key)
+            for key in ("XDG_CONFIG_HOME", "XDG_DATA_HOME", "XDG_STATE_HOME")
+        }
+        os.environ["XDG_CONFIG_HOME"] = str(self.root / "config")
+        os.environ["XDG_DATA_HOME"] = str(self.root / "data")
+        os.environ["XDG_STATE_HOME"] = str(self.root / "state")
+        write_test_config(self.root)
+        self.config = load_config()
+
+    def tearDown(self) -> None:
+        for key, value in self.old_env.items():
+            if value is None:
+                os.environ.pop(key, None)
+            else:
+                os.environ[key] = value
+        self.tempdir.cleanup()
+
+    def test_helper_success_is_recorded_as_unverified_paste_attempt(self) -> None:
+        metadata = update_metadata(create_session(self.config), status="recorded")
+        Path(str(metadata["audio_path"])).write_bytes(b"audio")
+
+        with (
+            patch(
+                "risper.toggle.active_profile",
+                return_value=ModelProfile("test", "test-engine", "test-model", "en", "test-command"),
+            ),
+            patch("risper.toggle.transcribe", return_value="hello"),
+            patch("risper.toggle.copy_text", return_value=(True, "copied")),
+            patch("risper.toggle.attempt_paste", return_value=(True, "paste attempted with ydotool")),
+            patch("risper.toggle.notify"),
+            patch("risper.toggle.play"),
+        ):
+            code = _finish_session(self.config, metadata)
+
+        self.assertEqual(code, 0)
+        persisted = json.loads(Path(str(metadata["audio_path"])).parent.joinpath("metadata.json").read_text())
+        self.assertEqual(persisted["status"], "paste_attempted")
+        self.assertTrue(persisted["paste_attempted"])
+        self.assertTrue(persisted["paste_helper_succeeded"])
+        self.assertFalse(persisted["paste_succeeded"])
+        self.assertEqual(persisted["paste_confirmation"], "helper_returned_success_target_unverified")
+
+
+if __name__ == "__main__":
+    unittest.main()

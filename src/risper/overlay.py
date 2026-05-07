@@ -9,7 +9,7 @@ from .sessions import load_session
 from .util import pid_alive
 
 
-TERMINAL_STATUSES = {"complete", "paste_failed", "failed", "recovered"}
+TERMINAL_STATUSES = {"complete", "paste_attempted", "paste_failed", "failed", "recovered"}
 BUSY_STATUSES = {"recorded", "transcribing", "pasting"}
 SPINNER_FRAMES = ("|", "/", "-", "\\")
 
@@ -25,6 +25,8 @@ def _status_text(status: str) -> str:
         return "◌ Pasting..."
     if status == "complete":
         return "✓ Copied"
+    if status == "paste_attempted":
+        return "✓ Copied - paste attempted"
     if status == "paste_failed":
         return "✓ Copied - paste unavailable"
     if status == "failed":

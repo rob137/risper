@@ -14,7 +14,7 @@ from .util import append_log
 
 
 ACTIVE_STATUSES = {"recording", "recorded", "transcribing", "pasting"}
-TERMINAL_STATUSES = {"complete", "paste_failed", "failed", "recovered"}
+TERMINAL_STATUSES = {"complete", "paste_attempted", "paste_failed", "failed", "recovered"}
 TERMINAL_HOLD_SECONDS = 8.0
 SPINNER_FRAMES = ("|", "/", "-", "\\")
 
@@ -41,6 +41,7 @@ def _title_for_status(status: str) -> str:
         "transcribing": "Risper transcribing",
         "pasting": "Risper pasting",
         "complete": "Risper copied",
+        "paste_attempted": "Risper copied",
         "paste_failed": "Risper copied",
         "failed": "Risper failed",
         "recovered": "Risper recovered",
@@ -60,6 +61,8 @@ def _detail_for_status(status: str, metadata: dict[str, Any] | None = None) -> s
         return "attempting paste"
     if status == "complete":
         return "transcript copied"
+    if status == "paste_attempted":
+        return "paste attempted; clipboard retained"
     errors = list((metadata or {}).get("errors") or [])
     if status == "paste_failed":
         return str(errors[-1]) if errors else "paste unavailable; transcript copied"

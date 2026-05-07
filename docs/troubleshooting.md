@@ -36,6 +36,8 @@ risper-diagnose last
 
 The per-session `events.jsonl` file records the configured paste mode, session type, paste helper result, and whether Risper only confirmed helper launch rather than target-app insertion.
 
+`paste_attempted` means a helper such as `ydotool` exited successfully, but target-app insertion was not verified. The transcript remains on the clipboard.
+
 If `wtype` is installed but the message says the compositor does not support the virtual keyboard protocol, GNOME Wayland is rejecting that paste route. The transcript is still on the clipboard.
 
 The current preferred fallback is `ydotool`, which uses Linux uinput instead of GNOME's virtual-keyboard protocol:

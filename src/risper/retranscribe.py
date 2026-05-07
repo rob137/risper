@@ -96,6 +96,11 @@ def retranscribe_session(session_id: str, copy: bool = False, paste: bool = Fals
             )
             paste_succeeded, paste_message = attempt_paste(config)
             append_log(status_log, paste_message)
+            confirmation = (
+                "helper_returned_success_target_unverified"
+                if paste_succeeded
+                else "not_pasted_clipboard_retained"
+            )
             append_event(
                 metadata,
                 "paste.result",
@@ -103,17 +108,23 @@ def retranscribe_session(session_id: str, copy: bool = False, paste: bool = Fals
                 mode=config.paste_mode,
                 session_type=metadata.get("session_type"),
                 message=paste_message,
-                confirmation="helper_returned_success" if paste_succeeded else "not_pasted_clipboard_retained",
+                confirmation=confirmation,
             )
             if not paste_succeeded:
                 errors.append(paste_message)
+        else:
+            confirmation = "not_attempted"
+    else:
+        confirmation = "not_attempted"
 
-    status = "complete" if not paste_attempted or paste_succeeded else "paste_failed"
+    status = "complete" if not paste_attempted else "paste_attempted" if paste_succeeded else "paste_failed"
     update_metadata(
         metadata,
         status=status,
         paste_attempted=paste_attempted,
-        paste_succeeded=paste_succeeded,
+        paste_helper_succeeded=paste_succeeded,
+        paste_succeeded=False if paste_attempted else paste_succeeded,
+        paste_confirmation=confirmation,
         errors=errors,
     )
     print(transcript)

@@ -39,7 +39,7 @@ Expected:
 - A session folder appears immediately under `~/.local/share/risper/sessions`.
 - `audio.wav`, `metadata.json`, `events.jsonl`, `status.log`, `error.log`, and `pw-record.log` are present.
 - `audio.wav` should be playable.
-- Metadata status becomes `complete` or `paste_failed` after transcription.
+- Metadata status becomes `complete`, `paste_attempted`, or `paste_failed` after transcription.
 - `transcript.raw.txt` and `transcript.clean.txt` are created.
 - `events.jsonl` records recorder, transcription, clipboard, and paste boundary events without storing transcript text.
 - The audio remains available if transcription fails.

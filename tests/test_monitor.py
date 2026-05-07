@@ -86,6 +86,15 @@ class MonitorModelTests(unittest.TestCase):
         self.assertFalse(snapshot.visible)
         self.assertEqual(snapshot.status, "complete")
 
+    def test_paste_attempted_status_is_terminal_and_honest(self) -> None:
+        metadata = create_session(self.config)
+        update_metadata(metadata, status="paste_attempted")
+
+        snapshot = StatusModel().snapshot(self.config, now=10.0)
+
+        self.assertEqual(snapshot.status, "paste_attempted")
+        self.assertIn("paste attempted", snapshot.detail)
+
     def test_display_detail_uses_spinner_for_busy_states(self) -> None:
         metadata = create_session(self.config)
         update_metadata(metadata, status="transcribing")
