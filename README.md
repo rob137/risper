@@ -7,6 +7,7 @@ The recording overlay follows session state and shows a live microphone level wh
 
 ## Commands
 
+- `risper`: enables autostart and starts the user daemon. `risper kill` stops it temporarily.
 - `risper-toggle`: start recording, then stop recording on the next run.
 - `risper-daemon`: marks incomplete sessions recovered on startup and stays alive for systemd.
 - `risper-open`: opens recordings, last session, last transcript, last audio, config, or copies the last transcript.
@@ -25,12 +26,7 @@ cd ~/personal/risper
 ```
 
 This creates wrappers in `~/.local/bin` and installs a reversible user service file. It does not use root and does not install dependencies.
-
-Optional daemon:
-
-```bash
-systemctl --user enable --now risper.service
-```
+It also enables and starts the user daemon, so Risper starts automatically with your user session.
 
 Manual development run without installing:
 

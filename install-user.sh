@@ -19,6 +19,7 @@ EOF
   chmod +x "${BIN_DIR}/${command}"
 }
 
+make_wrapper risper risper.cli
 make_wrapper risper-toggle risper.toggle
 make_wrapper risper-daemon risper.daemon
 make_wrapper risper-open risper.open
@@ -36,7 +37,8 @@ cp "${ROOT}/desktop/risper.desktop" "${APPLICATIONS_DIR}/risper.desktop"
 sed -i "s|__ROOT__|${ROOT}|g" "${APPLICATIONS_DIR}/risper.desktop"
 
 systemctl --user daemon-reload || true
+systemctl --user enable --now risper.service || true
 
 echo "Installed Risper user commands into ${BIN_DIR}."
-echo "Run: risper-diagnose"
-echo "Optional daemon: systemctl --user enable --now risper.service"
+echo "Run: risper"
+echo "Stop daemon temporarily: risper kill"
