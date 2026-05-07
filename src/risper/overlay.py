@@ -32,16 +32,26 @@ def _status_text(status: str) -> str:
     return status or "Risper"
 
 
-def _activity_line(status: str, elapsed: int) -> str:
+def _activity_line(status: str, elapsed: int, frame_index: int | None = None) -> str:
     if status not in BUSY_STATUSES:
         return f"{elapsed}s"
-    frame = SPINNER_FRAMES[elapsed % len(SPINNER_FRAMES)]
+    frame = SPINNER_FRAMES[(frame_index if frame_index is not None else elapsed) % len(SPINNER_FRAMES)]
     label = {
         "recorded": "saving audio",
         "transcribing": "working on transcript",
         "pasting": "attempting paste",
     }[status]
     return f"{elapsed}s  {frame} {label}"
+
+
+def _recorder_alive(recorder_pid: int) -> bool:
+    return recorder_pid > 0 and pid_alive(recorder_pid)
+
+
+def _visible_status(metadata_status: str, recorder_alive: bool) -> str:
+    if metadata_status == "recording" and recorder_alive:
+        return "recording"
+    return metadata_status
 
 
 def _read_status(session_dir: Path | None) -> str:
@@ -63,7 +73,7 @@ def main(argv: list[str] | None = None) -> int:
         gi.require_version("Gtk", "3.0")
         from gi.repository import Gdk, GLib, Gtk
     except Exception:
-        while pid_alive(recorder_pid) or _read_status(session_dir) not in TERMINAL_STATUSES:
+        while _visible_status(_read_status(session_dir), _recorder_alive(recorder_pid)) not in TERMINAL_STATUSES:
             time.sleep(0.5)
         return 0
 
@@ -91,10 +101,7 @@ def main(argv: list[str] | None = None) -> int:
 
     def tick() -> bool:
         nonlocal terminal_since
-        status = _read_status(session_dir)
-        recorder_alive = pid_alive(recorder_pid)
-        if recorder_alive:
-            status = "recording"
+        status = _visible_status(_read_status(session_dir), _recorder_alive(recorder_pid))
         if status in TERMINAL_STATUSES:
             terminal_since = terminal_since or time.monotonic()
         if terminal_since and time.monotonic() - terminal_since > 2.5:
@@ -108,7 +115,8 @@ def main(argv: list[str] | None = None) -> int:
             meter = "meter unavailable"
         else:
             meter = ""
-        line_2 = f"{elapsed}s  {meter}" if meter else _activity_line(status, elapsed)
+        frame_index = int((time.monotonic() - started) * 4)
+        line_2 = f"{elapsed}s  {meter}" if meter else _activity_line(status, elapsed, frame_index)
         label.set_markup(f"<b>{_status_text(status)}</b>\n{line_2}")
         return True
 

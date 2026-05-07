@@ -12,7 +12,17 @@ class LinuxDesktopPlatform(DesktopPlatform):
     name = "linux"
 
     def _command_exists(self, name: str) -> bool:
-        return shutil.which(name) is not None
+        return self._command_path(name) is not None
+
+    def _command_path(self, name: str) -> str | None:
+        found = shutil.which(name)
+        if found:
+            return found
+        for directory in ("/usr/bin", "/usr/local/bin", str(Path.home() / ".local" / "bin")):
+            candidate = Path(directory) / name
+            if candidate.exists() and os.access(candidate, os.X_OK):
+                return str(candidate)
+        return None
 
     def session_type(self) -> str:
         return os.environ.get("XDG_SESSION_TYPE", "unknown")
@@ -26,10 +36,11 @@ class LinuxDesktopPlatform(DesktopPlatform):
 
         last_error = "no clipboard command available"
         for command in candidates:
-            if not self._command_exists(command[0]):
+            command_path = self._command_path(command[0])
+            if not command_path:
                 continue
             try:
-                subprocess.run(command, input=text, text=True, check=True, timeout=5)
+                subprocess.run([command_path, *command[1:]], input=text, text=True, check=True, timeout=5)
                 return True, f"copied with {command[0]}"
             except Exception as exc:
                 last_error = f"{command[0]} failed: {exc}"
@@ -69,10 +80,12 @@ class LinuxDesktopPlatform(DesktopPlatform):
             if not command:
                 last_error = f"{selected} is not supported on {session_type}"
                 continue
-            if not self._command_exists(command[0]):
+            command_path = self._command_path(command[0])
+            if not command_path:
                 missing.append(selected)
                 last_error = f"{selected} is not installed"
                 continue
+            command = [command_path, *command[1:]]
 
             try:
                 if selected == "dotool":

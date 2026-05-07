@@ -4,7 +4,7 @@ import struct
 import unittest
 
 from risper.audiolevel import level_to_bars, pcm16_rms_level
-from risper.overlay import _activity_line, _status_text
+from risper.overlay import _activity_line, _status_text, _visible_status
 
 
 class AudioLevelTests(unittest.TestCase):
@@ -47,9 +47,14 @@ class OverlayStatusTests(unittest.TestCase):
         self.assertIn("Failed", _status_text("failed"))
 
     def test_busy_statuses_have_activity_line(self) -> None:
-        self.assertIn("working on transcript", _activity_line("transcribing", 1))
-        self.assertIn("attempting paste", _activity_line("pasting", 2))
+        self.assertIn("working on transcript", _activity_line("transcribing", 1, 1))
+        self.assertIn("attempting paste", _activity_line("pasting", 2, 2))
         self.assertEqual(_activity_line("complete", 3), "3s")
+
+    def test_metadata_status_wins_after_recording_stops(self) -> None:
+        self.assertEqual(_visible_status("recording", True), "recording")
+        self.assertEqual(_visible_status("transcribing", True), "transcribing")
+        self.assertEqual(_visible_status("pasting", True), "pasting")
 
 
 if __name__ == "__main__":
