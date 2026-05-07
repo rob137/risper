@@ -7,7 +7,7 @@ from pathlib import Path
 
 from helpers import write_test_config
 from risper.config import load_config
-from risper.monitor import StatusModel, _detail_for_status, _display_detail
+from risper.monitor import StatusModel, _configure_status_window, _detail_for_status, _display_detail
 from risper.sessions import create_session, update_metadata
 from risper.util import atomic_write_json
 
@@ -93,6 +93,26 @@ class MonitorModelTests(unittest.TestCase):
 
         self.assertIn("working on transcript", _display_detail(snapshot, mic_monitor=None, frame_index=1))
         self.assertEqual(_detail_for_status("idle"), "ready")
+
+    def test_status_window_is_configured_not_to_take_focus(self) -> None:
+        class FakeWindow:
+            def __init__(self) -> None:
+                self.calls: list[tuple[str, tuple]] = []
+
+            def __getattr__(self, name):
+                def method(*args):
+                    self.calls.append((name, args))
+
+                return method
+
+        window = FakeWindow()
+
+        _configure_status_window(window, type_hint="notification")
+
+        self.assertIn(("set_accept_focus", (False,)), window.calls)
+        self.assertIn(("set_focus_on_map", (False,)), window.calls)
+        self.assertIn(("set_skip_taskbar_hint", (True,)), window.calls)
+        self.assertIn(("set_type_hint", ("notification",)), window.calls)
 
 
 if __name__ == "__main__":

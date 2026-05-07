@@ -46,6 +46,7 @@ Expected:
 - Start/stop notifications and sounds are attempted.
 - The daemon-owned status monitor appears while recording/transcribing/pasting if GTK can create a normal Wayland window.
 - The status monitor shows a live mic-level bar when `pw-cat` can sample the microphone.
+- The status monitor should not take keyboard focus from the target app.
 - The status monitor logs `status_window.*` lifecycle and state-change lines in `~/.local/state/risper/risper.log`.
 
 History:

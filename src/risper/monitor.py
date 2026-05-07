@@ -156,6 +156,20 @@ def _log_snapshot(config: Config, snapshot: StatusSnapshot, event: str) -> None:
         )
 
 
+def _configure_status_window(window: Any, type_hint: Any | None = None) -> None:
+    window.set_default_size(360, 92)
+    window.set_resizable(False)
+    window.set_keep_above(True)
+    window.set_border_width(12)
+    window.set_decorated(False)
+    window.set_accept_focus(False)
+    window.set_focus_on_map(False)
+    window.set_skip_taskbar_hint(True)
+    window.set_skip_pager_hint(True)
+    if type_hint is not None:
+        window.set_type_hint(type_hint)
+
+
 def main() -> int:
     config = load_config()
     append_log(config.log_path, "status_window.started")
@@ -164,7 +178,8 @@ def main() -> int:
         import gi
 
         gi.require_version("Gtk", "3.0")
-        from gi.repository import GLib, Gtk
+        gi.require_version("Gdk", "3.0")
+        from gi.repository import Gdk, GLib, Gtk
     except Exception as exc:
         append_log(config.log_path, f"status_window.unavailable error={exc.__class__.__name__}: {exc}")
         print(f"GTK unavailable: {exc}", file=sys.stderr)
@@ -176,10 +191,8 @@ def main() -> int:
     frame_index = 0
 
     window = Gtk.Window(title="Risper status")
-    window.set_default_size(360, 92)
-    window.set_resizable(False)
-    window.set_keep_above(True)
-    window.set_border_width(12)
+    _configure_status_window(window, Gdk.WindowTypeHint.NOTIFICATION)
+    append_log(config.log_path, "status_window.non_focusable_configured")
 
     outer = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
     window.add(outer)

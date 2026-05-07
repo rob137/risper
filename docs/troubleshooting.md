@@ -48,7 +48,7 @@ risper-paste-test
 
 ## Status Window Did Not Appear
 
-The daemon starts `risper-monitor`, a persistent GTK status process. It uses a normal window rather than a transient notification, but GNOME Wayland can still affect placement and visibility. Recording is independent of the status window.
+The daemon starts `risper-monitor`, a persistent GTK status process. It is configured as a non-focusable notification-style window, but GNOME Wayland can still affect placement and visibility. Recording is independent of the status window.
 
 Inspect the UI lifecycle trail:
 
