@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any
 
 from .base import DesktopPlatform
+from ..config import APP_NAME, xdg_state_home
 
 
 class LinuxDesktopPlatform(DesktopPlatform):
@@ -127,11 +128,36 @@ class LinuxDesktopPlatform(DesktopPlatform):
     def notify(self, title: str, body: str = "") -> None:
         if not title or not self._command_exists("notify-send"):
             return
-        subprocess.Popen(
-            ["notify-send", title, body],
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-        )
+        command_path = self._command_path("notify-send")
+        if not command_path:
+            return
+        state_dir = xdg_state_home() / APP_NAME
+        state_dir.mkdir(parents=True, exist_ok=True)
+        id_path = state_dir / "notification-id"
+        command = [command_path, "--app-name=Risper", "--print-id"]
+        previous_id = id_path.read_text(encoding="utf-8").strip() if id_path.exists() else ""
+        if previous_id.isdigit():
+            command.append(f"--replace-id={previous_id}")
+        command.extend([title, body])
+        try:
+            result = subprocess.run(
+                command,
+                check=True,
+                text=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.DEVNULL,
+                timeout=3,
+            )
+        except Exception:
+            subprocess.Popen(
+                [command_path, "--app-name=Risper", title, body],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+            return
+        notification_id = result.stdout.strip()
+        if notification_id.isdigit():
+            id_path.write_text(notification_id + "\n", encoding="utf-8")
 
     def play_sound(self, kind: str) -> None:
         if not self._command_exists("canberra-gtk-play"):

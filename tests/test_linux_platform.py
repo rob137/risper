@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import os
 import subprocess
+import tempfile
 import unittest
 from unittest.mock import patch
 
@@ -90,6 +92,34 @@ class LinuxPasteTests(unittest.TestCase):
             patch("risper.platforms.linux.os.access", return_value=True),
         ):
             self.assertEqual(platform._command_path("wtype"), "/usr/bin/wtype")
+
+    def test_notify_replaces_previous_risper_notification(self) -> None:
+        platform = LinuxDesktopPlatform()
+        calls: list[list[str]] = []
+
+        def fake_run(command, **_kwargs):
+            calls.append(command)
+            completed = subprocess.CompletedProcess(command, 0, stdout=f"{100 + len(calls)}\n")
+            return completed
+
+        with tempfile.TemporaryDirectory() as tempdir:
+            old_state = os.environ.get("XDG_STATE_HOME")
+            os.environ["XDG_STATE_HOME"] = tempdir
+            try:
+                with (
+                    patch.object(platform, "_command_path", return_value="notify-send"),
+                    patch("risper.platforms.linux.subprocess.run", side_effect=fake_run),
+                ):
+                    platform.notify("🎙 Risper listening", "Run risper-toggle again to stop.")
+                    platform.notify("⏳ Risper transcribing", "Using whispercpp-base-en.")
+            finally:
+                if old_state is None:
+                    os.environ.pop("XDG_STATE_HOME", None)
+                else:
+                    os.environ["XDG_STATE_HOME"] = old_state
+
+        self.assertNotIn("--replace-id=101", calls[0])
+        self.assertIn("--replace-id=101", calls[1])
 
 
 if __name__ == "__main__":
