@@ -7,6 +7,7 @@ from . import __version__
 from .clipboard import copy_text
 from .config import load_config
 from .models import active_profile
+from .paste import attempt_paste
 from .recorder import current_recording, start_recording, stop_recording
 from .sessions import append_event, update_metadata
 from .sounds import play
@@ -98,6 +99,50 @@ def _finish_session(config, metadata: dict) -> int:
         notify("Risper clipboard failed", "Transcript was saved but not copied.")
         play(config, "error")
         return 1
+
+    if config.auto_paste_after_copy:
+        metadata = update_metadata(metadata, status="pasting", paste_attempted=True)
+        append_event(
+            metadata,
+            "paste.attempting",
+            mode=config.paste_mode,
+            session_type=metadata.get("session_type"),
+            trigger="auto_paste_after_copy",
+        )
+        pasted, paste_message = attempt_paste(config)
+        append_log(status_log, paste_message)
+        confirmation = (
+            "helper_returned_success_target_unverified"
+            if pasted
+            else "not_pasted_clipboard_retained"
+        )
+        append_event(
+            metadata,
+            "paste.result",
+            ok=pasted,
+            mode=config.paste_mode,
+            session_type=metadata.get("session_type"),
+            message=paste_message,
+            confirmation=confirmation,
+        )
+        errors = list(metadata.get("errors", []))
+        if not pasted:
+            errors.append(paste_message)
+        update_metadata(
+            metadata,
+            status="paste_attempted" if pasted else "paste_failed",
+            paste_attempted=True,
+            paste_helper_succeeded=pasted,
+            paste_succeeded=False,
+            paste_confirmation=confirmation,
+            errors=errors,
+        )
+        if pasted:
+            notify("Risper copied", "Paste attempted; transcript remains on clipboard.")
+        else:
+            notify("Risper copied", "Paste unavailable; transcript is on clipboard.")
+        play(config, "stop")
+        return 0
 
     append_log(status_log, "automatic paste skipped; transcript left on clipboard")
     append_event(

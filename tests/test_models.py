@@ -165,6 +165,7 @@ transcription_command = "/bin/echo legacy"
 model = "legacy-model"
 language = "cy"
 paste_mode = "clipboard_only"
+auto_paste_after_copy = false
 show_overlay = false
 play_sounds = false
 retention = "never"

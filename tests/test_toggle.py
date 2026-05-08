@@ -4,6 +4,7 @@ import json
 import os
 import tempfile
 import unittest
+from dataclasses import replace
 from pathlib import Path
 from unittest.mock import patch
 
@@ -60,6 +61,33 @@ class ToggleFinishTests(unittest.TestCase):
         self.assertFalse(persisted["paste_succeeded"])
         self.assertEqual(persisted["paste_confirmation"], "not_attempted_automatic_paste_disabled")
         self.assertEqual(read_events(metadata)[-1]["event"], "paste.skipped")
+
+    def test_finish_can_attempt_opt_in_system_paste(self) -> None:
+        config = replace(self.config, auto_paste_after_copy=True, paste_mode="ydotool")
+        metadata = update_metadata(create_session(config), status="recorded")
+        Path(str(metadata["audio_path"])).write_bytes(b"audio")
+
+        with (
+            patch(
+                "risper.toggle.active_profile",
+                return_value=ModelProfile("test", "test-engine", "test-model", "en", "test-command"),
+            ),
+            patch("risper.toggle.transcribe", return_value="hello"),
+            patch("risper.toggle.copy_text", return_value=(True, "copied")),
+            patch("risper.toggle.attempt_paste", return_value=(True, "paste attempted with ydotool")) as paste,
+            patch("risper.toggle.notify"),
+            patch("risper.toggle.play"),
+        ):
+            code = _finish_session(config, metadata)
+
+        self.assertEqual(code, 0)
+        paste.assert_called_once_with(config)
+        persisted = json.loads(Path(str(metadata["audio_path"])).parent.joinpath("metadata.json").read_text())
+        self.assertEqual(persisted["status"], "paste_attempted")
+        self.assertTrue(persisted["paste_attempted"])
+        self.assertTrue(persisted["paste_helper_succeeded"])
+        self.assertFalse(persisted["paste_succeeded"])
+        self.assertEqual(persisted["paste_confirmation"], "helper_returned_success_target_unverified")
 
     def test_main_cancels_active_transcription_instead_of_starting_recording(self) -> None:
         state = {"controller_pid": 123, "worker_pid": 456}

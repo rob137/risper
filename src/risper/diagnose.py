@@ -142,6 +142,7 @@ def _print_environment_diagnosis() -> int:
         binary = profile.command.split(" ", 1)[0]
         print(f"  command binary      {binary} ({'yes' if Path(binary).exists() else 'missing'})")
     print(f"  paste mode          {config.paste_mode}")
+    print(f"  auto paste          {'enabled' if config.auto_paste_after_copy else 'disabled'}")
     print(f"  double Alt          {'enabled' if config.double_alt_enabled else 'disabled'}")
     print(f"  double Alt window   {config.double_alt_window_ms} ms")
     transcription = current_transcription(config)

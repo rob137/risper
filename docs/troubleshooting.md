@@ -26,7 +26,7 @@ risper-open last-session
 
 ## Clipboard And Paste
 
-On GNOME Wayland, apps generally cannot inject text globally without a helper. Risper therefore copies the transcript to the clipboard and does not attempt automatic paste during normal dictation.
+On GNOME Wayland, apps generally cannot inject text globally without a helper. Risper therefore copies the transcript to the clipboard by default. Automatic paste is opt-in through `auto_paste_after_copy = true`.
 
 Inspect the latest session:
 
@@ -34,14 +34,15 @@ Inspect the latest session:
 risper-diagnose last
 ```
 
-The per-session `events.jsonl` file records clipboard copy and the skipped-paste decision.
+The per-session `events.jsonl` file records clipboard copy and either the skipped-paste decision or the opt-in paste attempt.
 
 Older sessions may contain `paste_attempted`. That means a helper such as `ydotool` exited successfully, but target-app insertion was not verified. The transcript remained on the clipboard.
 
-The old paste verification harness is still available for experiments:
+The paste verification helpers are available for experiments:
 
 ```bash
 risper-paste-test
+risper-paste-now --mode ydotool
 ```
 
 ## Status Feedback

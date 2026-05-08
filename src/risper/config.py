@@ -38,6 +38,7 @@ class Config:
     model: str
     language: str
     paste_mode: str
+    auto_paste_after_copy: bool
     show_overlay: bool
     play_sounds: bool
     double_alt_enabled: bool
@@ -54,6 +55,7 @@ transcription_command = ""
 model = "base.en"
 language = "en"
 paste_mode = "clipboard_only" # clipboard_only | auto | xdotool | wtype | ydotool | dotool
+auto_paste_after_copy = false
 # The daemon no longer starts a standalone status window.
 show_overlay = false
 play_sounds = true
@@ -126,6 +128,7 @@ def load_config() -> Config:
         model=str(raw.get("model", "base.en")),
         language=str(raw.get("language", "en")),
         paste_mode=paste_mode,
+        auto_paste_after_copy=bool(raw.get("auto_paste_after_copy", False)),
         show_overlay=bool(raw.get("show_overlay", False)),
         play_sounds=bool(raw.get("play_sounds", True)),
         double_alt_enabled=bool(raw.get("double_alt_enabled", False)),
