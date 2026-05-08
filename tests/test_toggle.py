@@ -76,7 +76,7 @@ class ToggleFinishTests(unittest.TestCase):
         self.assertEqual(code, 0)
         cancel.assert_called_once_with(self.config, state)
         start.assert_not_called()
-        notify.assert_called_once_with("Risper cancelled", "Transcription stopped.")
+        notify.assert_called_once_with("🛑 Risper cancelled", "Transcription stopped.")
 
 
 if __name__ == "__main__":

@@ -63,7 +63,7 @@ def retranscribe_session(session_id: str, copy: bool = False, paste: bool = Fals
         errors = list(metadata.get("errors", []))
         errors.append(message)
         update_metadata(metadata, status="failed", errors=errors)
-        notify("Risper retranscription failed", "Audio was kept; see session error log.")
+        notify("⚠ Risper retranscription failed", "Audio was kept; see session error log.")
         play(config, "error")
         return 1
 

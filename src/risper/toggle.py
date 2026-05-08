@@ -28,7 +28,7 @@ def _finish_session(config, metadata: dict) -> int:
 
     if metadata.get("status") != "recorded":
         append_event(metadata, "workflow.finish_rejected", status=metadata.get("status"))
-        notify("Risper recording failed", "Audio was not captured cleanly; see session error log.")
+        notify("⚠ Risper recording failed", "Audio was not captured cleanly; see session error log.")
         play(config, "error")
         return 1
 
@@ -50,7 +50,7 @@ def _finish_session(config, metadata: dict) -> int:
     )
     append_log(status_log, "starting transcription")
     start_transcription_state(config, metadata, profile.id)
-    notify("Risper transcribing", f"Using {profile.id}.")
+    notify("⏳ Risper transcribing", f"Using {profile.id}.")
 
     try:
         transcript = transcribe(
@@ -69,7 +69,7 @@ def _finish_session(config, metadata: dict) -> int:
         errors = list(metadata.get("errors", []))
         errors.append(message)
         update_metadata(metadata, status="failed", errors=errors)
-        notify("Risper transcription failed", "Audio was saved. Configure a local engine and retranscribe.")
+        notify("⚠ Risper transcription failed", "Audio was saved. Configure a local engine and retranscribe.")
         play(config, "error")
         return 1
     finally:
@@ -95,7 +95,7 @@ def _finish_session(config, metadata: dict) -> int:
         errors = list(metadata.get("errors", []))
         errors.append(clipboard_message)
         update_metadata(metadata, status="failed", errors=errors)
-        notify("Risper clipboard failed", "Transcript was saved but not copied.")
+        notify("⚠ Risper clipboard failed", "Transcript was saved but not copied.")
         play(config, "error")
         return 1
 
@@ -114,7 +114,7 @@ def _finish_session(config, metadata: dict) -> int:
         paste_succeeded=False,
         paste_confirmation="not_attempted_automatic_paste_disabled",
     )
-    notify("Risper copied", "Transcript is on the clipboard.")
+    notify("✅ Risper copied", "Transcript is on the clipboard.")
     play(config, "stop")
     return 0
 
@@ -124,7 +124,7 @@ def main() -> int:
     transcription = current_transcription(config)
     if transcription:
         cancel_transcription(config, transcription)
-        notify("Risper cancelled", "Transcription stopped.")
+        notify("🛑 Risper cancelled", "Transcription stopped.")
         play(config, "stop")
         return 0
 
@@ -137,12 +137,12 @@ def main() -> int:
     try:
         state = start_recording(config)
     except Exception as exc:
-        notify("Risper could not start", str(exc))
+        notify("⚠ Risper could not start", str(exc))
         print(f"risper-toggle: {exc}", file=sys.stderr)
         play(config, "error")
         return 1
 
-    notify("Risper listening", "Run risper-toggle again to stop.")
+    notify("🎙 Risper listening", "Run risper-toggle again to stop.")
     play(config, "start")
     print(f"Risper {__version__}: recording {state['session_dir']}")
     return 0

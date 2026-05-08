@@ -41,7 +41,7 @@ def _start_double_alt_listener(config):
     append_log(config.log_path, message)
     if ok:
         return listener
-    notify("Risper double Alt unavailable", message)
+    notify("⚠ Risper double Alt unavailable", message)
     return None
 
 
@@ -52,7 +52,7 @@ def main() -> int:
     recovered = mark_incomplete_recordings_recovered(config)
     append_log(config.log_path, f"daemon started; recovered={recovered}")
     if recovered:
-        notify("Risper recovered sessions", f"{recovered} incomplete session(s) marked recovered.")
+        notify("♻ Risper recovered sessions", f"{recovered} incomplete session(s) marked recovered.")
     if config.show_overlay:
         append_log(config.log_path, "status-window ignored; standalone monitor is disabled")
     hotkey_listener = _start_double_alt_listener(config)
