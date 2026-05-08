@@ -11,7 +11,7 @@ from helpers import write_test_config
 from risper.config import load_config
 from risper.models import ModelProfile
 from risper.sessions import create_session, read_events, update_metadata
-from risper.toggle import _finish_session
+from risper.toggle import _finish_session, main
 
 
 class ToggleFinishTests(unittest.TestCase):
@@ -60,6 +60,23 @@ class ToggleFinishTests(unittest.TestCase):
         self.assertFalse(persisted["paste_succeeded"])
         self.assertEqual(persisted["paste_confirmation"], "not_attempted_automatic_paste_disabled")
         self.assertEqual(read_events(metadata)[-1]["event"], "paste.skipped")
+
+    def test_main_cancels_active_transcription_instead_of_starting_recording(self) -> None:
+        state = {"controller_pid": 123, "worker_pid": 456}
+
+        with (
+            patch("risper.toggle.current_transcription", return_value=state),
+            patch("risper.toggle.cancel_transcription", return_value=True) as cancel,
+            patch("risper.toggle.start_recording") as start,
+            patch("risper.toggle.notify") as notify,
+            patch("risper.toggle.play"),
+        ):
+            code = main()
+
+        self.assertEqual(code, 0)
+        cancel.assert_called_once_with(self.config, state)
+        start.assert_not_called()
+        notify.assert_called_once_with("Risper cancelled", "Transcription stopped.")
 
 
 if __name__ == "__main__":

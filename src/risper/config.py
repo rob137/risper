@@ -30,6 +30,7 @@ class Config:
     sessions_dir: Path
     state_dir: Path
     current_state_path: Path
+    current_transcription_path: Path
     log_path: Path
     selected_model: str
     transcription_engine: str
@@ -117,6 +118,7 @@ def load_config() -> Config:
         sessions_dir=sessions_dir,
         state_dir=state_dir,
         current_state_path=state_dir / "current.json",
+        current_transcription_path=state_dir / "current-transcription.json",
         log_path=state_dir / "risper.log",
         selected_model=str(raw.get("selected_model", "default")),
         transcription_engine=str(raw.get("transcription_engine", "external")),

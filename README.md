@@ -2,13 +2,13 @@
 
 Risper is a local-first Ubuntu dictation utility. It is built around durable session folders: recording creates the folder and metadata before audio capture starts, and failures leave recoverable files behind.
 
-Current state: phase 1/2 with a small daemon and CLI history. Recording, local transcription via whisper.cpp, session metadata, notifications, sounds, CLI history, and clipboard copy are implemented.
+Current state: phase 1/2 with a small daemon and CLI history. Recording, local transcription via selectable local models, session metadata, notifications, sounds, CLI history, and clipboard copy are implemented.
 Risper deliberately leaves completed transcripts on the clipboard instead of trying to inject text into the focused app. On GNOME Wayland that path was not reliable enough to keep in the default workflow.
 
 ## Commands
 
 - `risper`: enables autostart and starts the user daemon. `risper kill` stops it temporarily.
-- `risper-toggle`: start recording, then stop recording on the next run.
+- `risper-toggle`: start recording, stop recording on the next run, or cancel an active transcription.
 - `risper-daemon`: marks incomplete sessions recovered on startup and stays alive for systemd.
 - `risper-open`: opens recordings, last session, last transcript, last audio, config, or copies the last transcript.
 - `risper-paste-test`: diagnostic helper for paste experiments with a real focused GTK text field.
@@ -136,7 +136,7 @@ Parakeet profile template:
 risper-models list
 ```
 
-This registers `nvidia/parakeet-tdt-0.6b-v3` through `scripts/parakeet-nemo-wrapper.py`. On this laptop the local NeMo/PyTorch environment has been installed, but whisper.cpp remains the default because it is much faster on CPU. See `docs/parakeet.md`.
+This registers `nvidia/parakeet-tdt-0.6b-v3` through `scripts/parakeet-nemo-wrapper.py`. On this laptop the local NeMo/PyTorch environment has been installed and Parakeet is usable, but it is much slower and heavier than whisper.cpp on CPU. See `docs/parakeet.md`.
 
 ## Data
 
@@ -174,6 +174,8 @@ risper-toggle
 ```
 
 Double Alt is implemented as an optional Linux input-event listener in `risper-daemon`, but it is disabled by default. It needs read access to `/dev/input/event*`; on GNOME Wayland that usually means explicit input-group or udev-rule setup. See `docs/double-alt.md`.
+
+When Double Alt is enabled, tapping it during transcription cancels the active transcription instead of starting a new recording.
 
 ## Current Environment Findings
 

@@ -166,6 +166,17 @@ class TranscriberTests(unittest.TestCase):
 
         self.assertEqual(text, "selected profile transcript")
 
+    def test_reports_backend_process_id(self) -> None:
+        script = self._script("print('pid callback transcript')\n")
+        profile = ModelProfile("pid", "test", "test-model", "en", f"/usr/bin/python3 {script}")
+        seen: list[int] = []
+
+        text = transcribe(self.config, self.audio, self.raw, self.clean, profile, on_process_start=seen.append)
+
+        self.assertEqual(text, "pid callback transcript")
+        self.assertEqual(len(seen), 1)
+        self.assertGreater(seen[0], 0)
+
     def test_expands_tilde_for_single_executable_command(self) -> None:
         home = self.root / "home"
         bin_dir = home / "bin"

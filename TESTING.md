@@ -44,6 +44,8 @@ Expected:
 - `events.jsonl` records recorder, transcription, clipboard, and skipped-paste boundary events without storing transcript text.
 - The audio remains available if transcription fails.
 - Start/stop notifications and sounds are attempted.
+- A transcription-start notification appears after stopping recording.
+- Running `risper-toggle` during transcription cancels the active transcription.
 - No daemon-owned status window should appear during dictation.
 
 History:

@@ -12,6 +12,7 @@ from .config import load_config
 from .models import active_profile, load_profiles
 from .platforms import current_platform
 from .sessions import events_path, find_session, read_events, session_dir
+from .transcription_state import current_transcription
 
 
 def _run(command: list[str]) -> str:
@@ -143,6 +144,9 @@ def _print_environment_diagnosis() -> int:
     print(f"  paste mode          {config.paste_mode}")
     print(f"  double Alt          {'enabled' if config.double_alt_enabled else 'disabled'}")
     print(f"  double Alt window   {config.double_alt_window_ms} ms")
+    transcription = current_transcription(config)
+    if transcription:
+        print(f"  active transcription {transcription.get('session_dir')} worker={transcription.get('worker_pid')}")
     return 0
 
 

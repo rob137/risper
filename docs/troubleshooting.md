@@ -48,6 +48,10 @@ risper-paste-test
 
 Risper no longer starts a standalone status window during dictation. Ubuntu notifications and the GNOME microphone indicator are the intended lightweight feedback. Recording and transcription details are still logged in the session folder and `~/.local/state/risper/risper.log`.
 
+## Cancel Transcription
+
+If transcription is still running, trigger `risper-toggle` again. With Double Alt enabled this means Double Alt once to start recording, Double Alt again to stop and transcribe, then Double Alt once more to cancel that transcription.
+
 ## Daemon Is Not Running
 
 The toggle command does not require the daemon. The daemon is useful for startup recovery:

@@ -1,6 +1,6 @@
 # Performance
 
-Measurements on 2026-05-06, Ubuntu 24.04, AMD Ryzen 7 250, 14 GiB RAM, no NVIDIA GPU.
+Measurements on Ubuntu 24.04, AMD Ryzen 7 250, 14 GiB RAM, no NVIDIA GPU.
 
 Command:
 
@@ -29,12 +29,19 @@ whispercpp-base-en         1    0.913   345.6    284.2     35
 parakeet-tdt-0-6b-v3       1   18.607   149.5   5923.9    120
 ```
 
+Result on 2026-05-08 after selecting Parakeet for live use:
+
+```text
+profile                  rep     wall    cpu%   rss_mb  chars
+parakeet-tdt-0-6b-v3       1   27.873   127.6   5746.5     64
+```
+
 Interpretation:
 
-- whisper.cpp is currently the practical default for fast dictation.
+- whisper.cpp is still the fast option.
 - Parakeet works on CPU, but process-per-dictation is expensive: roughly 19-28s wall time and 5.7-5.9 GiB peak RSS.
-- The laptop is not unusable during the benchmark, but Parakeet is heavy enough that it should not be the default without a persistent worker or a smaller/faster runtime path.
-- Parakeet quality may still be worth it for optional retranscription.
+- The laptop is not unusable during the benchmark, but Parakeet is heavy enough that live dictation has a long processing wait unless a persistent worker or smaller/faster runtime path is added.
+- Parakeet is currently selected on this laptop for quality testing.
 
 Likely next optimization:
 
