@@ -1,9 +1,12 @@
 from __future__ import annotations
 
+import glob
 import signal
 import subprocess
 import sys
 import time
+from pathlib import Path
+from typing import Any
 
 from .config import load_config
 from .platforms import current_platform
@@ -12,6 +15,7 @@ from .util import append_log, notify
 
 
 running = True
+RESUME_GAP_SECONDS = 30.0
 
 
 def _stop(_signum, _frame) -> None:
@@ -45,6 +49,53 @@ def _start_double_alt_listener(config):
     return None
 
 
+def _input_device_signature() -> tuple[tuple[str, int, int], ...]:
+    signature: list[tuple[str, int, int]] = []
+    for path in sorted(glob.glob("/dev/input/event*")):
+        try:
+            details = Path(path).stat()
+        except OSError:
+            continue
+        signature.append((path, details.st_rdev, details.st_mtime_ns))
+    return tuple(signature)
+
+
+def _refresh_reason(
+    last_wall: float,
+    last_mono: float,
+    previous_devices: tuple[tuple[str, int, int], ...],
+    current_devices: tuple[tuple[str, int, int], ...],
+    *,
+    now_wall: float | None = None,
+    now_mono: float | None = None,
+    resume_gap_seconds: float = RESUME_GAP_SECONDS,
+) -> str | None:
+    now_wall = time.time() if now_wall is None else now_wall
+    now_mono = time.monotonic() if now_mono is None else now_mono
+    wall_elapsed = now_wall - last_wall
+    mono_elapsed = now_mono - last_mono
+    if wall_elapsed - mono_elapsed > resume_gap_seconds:
+        return "resume detected"
+    if current_devices != previous_devices:
+        return "input devices changed"
+    return None
+
+
+def _stop_listener(listener: Any | None) -> None:
+    if not listener:
+        return
+    try:
+        listener.stop()
+    except Exception:
+        return
+
+
+def _restart_double_alt_listener(config, listener, reason: str):
+    append_log(config.log_path, f"double-alt listener restarting: {reason}")
+    _stop_listener(listener)
+    return _start_double_alt_listener(config)
+
+
 def main() -> int:
     signal.signal(signal.SIGTERM, _stop)
     signal.signal(signal.SIGINT, _stop)
@@ -56,8 +107,19 @@ def main() -> int:
     if config.show_overlay:
         append_log(config.log_path, "status-window ignored; standalone monitor is disabled")
     hotkey_listener = _start_double_alt_listener(config)
+    last_wall = time.time()
+    last_mono = time.monotonic()
+    input_signature = _input_device_signature()
     while running:
         time.sleep(1)
+        current_signature = _input_device_signature()
+        reason = _refresh_reason(last_wall, last_mono, input_signature, current_signature)
+        if reason and config.double_alt_enabled and current_platform().name == "linux":
+            hotkey_listener = _restart_double_alt_listener(config, hotkey_listener, reason)
+            current_signature = _input_device_signature()
+        last_wall = time.time()
+        last_mono = time.monotonic()
+        input_signature = current_signature
     if hotkey_listener:
         hotkey_listener.stop()
     append_log(config.log_path, "daemon stopped")
