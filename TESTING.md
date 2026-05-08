@@ -58,7 +58,6 @@ PYTHONPATH=src python3 -m risper.retranscribe last
 PYTHONPATH=src python3 -m risper.model_cli list
 PYTHONPATH=src python3 -m risper.status_window
 PYTHONPATH=src python3 -m risper.paste_test
-PYTHONPATH=src python3 -m risper.paste_now --mode ydotool
 PYTHONPATH=src python3 -m risper.benchmark last --profile whispercpp-base-en --profile parakeet-tdt-0-6b-v3
 ```
 

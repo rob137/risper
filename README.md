@@ -3,7 +3,7 @@
 Risper is a local-first Ubuntu dictation utility. It is built around durable session folders: recording creates the folder and metadata before audio capture starts, and failures leave recoverable files behind.
 
 Current state: phase 1/2 with a small daemon and CLI history. Recording, local transcription via selectable local models, session metadata, notifications, sounds, CLI history, and clipboard copy are implemented.
-Risper deliberately leaves completed transcripts on the clipboard by default. On GNOME Wayland, automatic paste stays opt-in because helper success does not prove target-app insertion.
+Risper deliberately leaves completed transcripts on the clipboard instead of trying to inject text into the focused app. On GNOME Wayland that path was not reliable enough to keep in the default workflow.
 
 ## Commands
 
@@ -12,7 +12,6 @@ Risper deliberately leaves completed transcripts on the clipboard by default. On
 - `risper-daemon`: marks incomplete sessions recovered on startup and stays alive for systemd.
 - `risper-open`: opens recordings, last session, last transcript, last audio, config, or copies the last transcript.
 - `risper-paste-test`: diagnostic helper for paste experiments with a real focused GTK text field.
-- `risper-paste-now`: attempts system paste from the current clipboard for focused-target experiments.
 - `risper-history`: prints recent sessions and can open, play, copy, retranscribe, or delete a session by id.
 - `risper-retranscribe`: retranscribes a saved session by id, or the last session by default.
 - `risper-models`: lists, selects, and adds local transcription model profiles.
@@ -75,7 +74,6 @@ transcription_command = ""
 model = "base.en"
 language = "en"
 paste_mode = "clipboard_only"
-auto_paste_after_copy = false
 show_overlay = false
 play_sounds = true
 double_alt_enabled = false
