@@ -1,11 +1,12 @@
 from __future__ import annotations
 
+import io
 import json
 import os
 import tempfile
 import unittest
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import call, patch
 
 from helpers import write_test_config
 from risper.config import load_config
@@ -48,7 +49,7 @@ class ToggleFinishTests(unittest.TestCase):
             patch("risper.toggle.transcribe", return_value="hello"),
             patch("risper.toggle.copy_text", return_value=(True, "copied")),
             patch("risper.toggle.notify"),
-            patch("risper.toggle.play"),
+            patch("risper.toggle.play") as play,
         ):
             code = _finish_session(self.config, metadata)
 
@@ -60,6 +61,10 @@ class ToggleFinishTests(unittest.TestCase):
         self.assertFalse(persisted["paste_succeeded"])
         self.assertEqual(persisted["paste_confirmation"], "not_attempted_automatic_paste_disabled")
         self.assertEqual(read_events(metadata)[-1]["event"], "paste.skipped")
+        self.assertEqual(
+            play.call_args_list,
+            [call(self.config, "transcription_start"), call(self.config, "success")],
+        )
 
     def test_main_cancels_active_transcription_instead_of_starting_recording(self) -> None:
         state = {"controller_pid": 123, "worker_pid": 456}
@@ -69,7 +74,7 @@ class ToggleFinishTests(unittest.TestCase):
             patch("risper.toggle.cancel_transcription", return_value=True) as cancel,
             patch("risper.toggle.start_recording") as start,
             patch("risper.toggle.notify") as notify,
-            patch("risper.toggle.play"),
+            patch("risper.toggle.play") as play,
         ):
             code = main()
 
@@ -77,6 +82,23 @@ class ToggleFinishTests(unittest.TestCase):
         cancel.assert_called_once_with(self.config, state)
         start.assert_not_called()
         notify.assert_called_once_with("🛑 Risper cancelled", "Transcription stopped.")
+        play.assert_called_once_with(self.config, "cancel")
+
+    def test_main_start_recording_uses_recording_start_sound(self) -> None:
+        state = {"session_dir": str(self.root / "session")}
+
+        with (
+            patch("risper.toggle.current_transcription", return_value=None),
+            patch("risper.toggle.current_recording", return_value=None),
+            patch("risper.toggle.start_recording", return_value=state),
+            patch("risper.toggle.notify"),
+            patch("risper.toggle.play") as play,
+            patch("sys.stdout", new=io.StringIO()),
+        ):
+            code = main()
+
+        self.assertEqual(code, 0)
+        play.assert_called_once_with(self.config, "recording_start")
 
 
 if __name__ == "__main__":

@@ -4,7 +4,7 @@ import os
 import subprocess
 import tempfile
 import unittest
-from unittest.mock import patch
+from unittest.mock import call, patch
 
 from risper.platforms.linux import LinuxDesktopPlatform
 
@@ -120,6 +120,47 @@ class LinuxPasteTests(unittest.TestCase):
 
         self.assertNotIn("--replace-id=101", calls[0])
         self.assertIn("--replace-id=101", calls[1])
+
+    def test_play_sound_uses_distinct_events_for_workflow_outcomes(self) -> None:
+        platform = LinuxDesktopPlatform()
+
+        with (
+            patch.object(platform, "_command_exists", return_value=True),
+            patch("risper.platforms.linux.subprocess.Popen") as popen,
+        ):
+            for kind in ("recording_start", "transcription_start", "success", "cancel", "error"):
+                platform.play_sound(kind)
+
+        self.assertEqual(
+            popen.call_args_list,
+            [
+                call(
+                    ["canberra-gtk-play", "-i", "message-new-instant", "-V", "-18", "-d", "Risper recording_start"],
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                ),
+                call(
+                    ["canberra-gtk-play", "-i", "service-login", "-V", "-18", "-d", "Risper transcription_start"],
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                ),
+                call(
+                    ["canberra-gtk-play", "-i", "complete", "-V", "-18", "-d", "Risper success"],
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                ),
+                call(
+                    ["canberra-gtk-play", "-i", "service-logout", "-V", "-18", "-d", "Risper cancel"],
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                ),
+                call(
+                    ["canberra-gtk-play", "-i", "dialog-error", "-V", "-18", "-d", "Risper error"],
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                ),
+            ],
+        )
 
 
 if __name__ == "__main__":

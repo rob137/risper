@@ -34,7 +34,16 @@ class MacOSDesktopPlatform(DesktopPlatform):
         subprocess.Popen(["osascript", "-e", script], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
     def play_sound(self, kind: str) -> None:
-        sound = "Glass" if kind == "error" else "Pop"
+        sound = {
+            "recording_start": "Pop",
+            "transcription_start": "Tink",
+            "success": "Hero",
+            "cancel": "Bottle",
+            "error": "Glass",
+            # Backwards-compatible aliases for older callers or scripts.
+            "start": "Pop",
+            "stop": "Hero",
+        }.get(kind, "Pop")
         subprocess.Popen(["afplay", f"/System/Library/Sounds/{sound}.aiff"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
     def open_path(self, path: Path) -> tuple[bool, str]:

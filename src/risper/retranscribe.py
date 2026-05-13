@@ -46,6 +46,7 @@ def retranscribe_session(session_id: str, copy: bool = False, paste: bool = Fals
         model=profile.model,
         language=profile.language,
     )
+    play(config, "transcription_start")
 
     try:
         transcript = transcribe(
@@ -85,6 +86,7 @@ def retranscribe_session(session_id: str, copy: bool = False, paste: bool = Fals
         if not copied:
             errors.append(clipboard_message)
             update_metadata(metadata, status="failed", errors=errors)
+            play(config, "error")
             return 1
         if paste:
             paste_attempted = True
@@ -127,6 +129,7 @@ def retranscribe_session(session_id: str, copy: bool = False, paste: bool = Fals
         paste_confirmation=confirmation,
         errors=errors,
     )
+    play(config, "error" if status == "paste_failed" else "success")
     print(transcript)
     return 0
 

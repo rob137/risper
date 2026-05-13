@@ -163,9 +163,14 @@ class LinuxDesktopPlatform(DesktopPlatform):
         if not self._command_exists("canberra-gtk-play"):
             return
         event = {
+            "recording_start": "message-new-instant",
+            "transcription_start": "service-login",
+            "success": "complete",
+            "cancel": "service-logout",
+            "error": "dialog-error",
+            # Backwards-compatible aliases for older callers or scripts.
             "start": "message-new-instant",
             "stop": "complete",
-            "error": "dialog-error",
         }.get(kind, "message")
         subprocess.Popen(
             ["canberra-gtk-play", "-i", event, "-V", "-18", "-d", f"Risper {kind}"],

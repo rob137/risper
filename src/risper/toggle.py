@@ -51,6 +51,7 @@ def _finish_session(config, metadata: dict) -> int:
     append_log(status_log, "starting transcription")
     start_transcription_state(config, metadata, profile.id)
     notify("⏳ Risper transcribing", f"Using {profile.id}.")
+    play(config, "transcription_start")
 
     try:
         transcript = transcribe(
@@ -115,7 +116,7 @@ def _finish_session(config, metadata: dict) -> int:
         paste_confirmation="not_attempted_automatic_paste_disabled",
     )
     notify("✅ Risper copied", "Transcript is on the clipboard.")
-    play(config, "stop")
+    play(config, "success")
     return 0
 
 
@@ -125,12 +126,11 @@ def main() -> int:
     if transcription:
         cancel_transcription(config, transcription)
         notify("🛑 Risper cancelled", "Transcription stopped.")
-        play(config, "stop")
+        play(config, "cancel")
         return 0
 
     state = current_recording(config)
     if state:
-        play(config, "stop")
         metadata = stop_recording(config, state)
         return _finish_session(config, metadata)
 
@@ -143,7 +143,7 @@ def main() -> int:
         return 1
 
     notify("🎙 Risper listening", "Run risper-toggle again to stop.")
-    play(config, "start")
+    play(config, "recording_start")
     print(f"Risper {__version__}: recording {state['session_dir']}")
     return 0
 
