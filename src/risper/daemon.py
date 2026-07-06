@@ -66,6 +66,7 @@ def _refresh_reason(
     previous_devices: tuple[tuple[str, int, int], ...],
     current_devices: tuple[tuple[str, int, int], ...],
     *,
+    pending_devices: tuple[tuple[str, int, int], ...] | None = None,
     now_wall: float | None = None,
     now_mono: float | None = None,
     resume_gap_seconds: float = RESUME_GAP_SECONDS,
@@ -76,7 +77,10 @@ def _refresh_reason(
     mono_elapsed = now_mono - last_mono
     if wall_elapsed - mono_elapsed > resume_gap_seconds:
         return "resume detected"
-    if current_devices != previous_devices:
+    # devices must hold the same changed shape for a full tick before we
+    # restart: dock/undock enumerates devices one by one and used to fire
+    # several restarts within a second
+    if current_devices != previous_devices and current_devices == pending_devices:
         return "input devices changed"
     return None
 
@@ -110,16 +114,27 @@ def main() -> int:
     last_wall = time.time()
     last_mono = time.monotonic()
     input_signature = _input_device_signature()
+    pending_signature = None
     while running:
         time.sleep(1)
         current_signature = _input_device_signature()
-        reason = _refresh_reason(last_wall, last_mono, input_signature, current_signature)
+        reason = _refresh_reason(
+            last_wall,
+            last_mono,
+            input_signature,
+            current_signature,
+            pending_devices=pending_signature,
+        )
         if reason and config.double_alt_enabled and current_platform().name == "linux":
             hotkey_listener = _restart_double_alt_listener(config, hotkey_listener, reason)
-            current_signature = _input_device_signature()
+            input_signature = _input_device_signature()
+            pending_signature = None
+        elif current_signature != input_signature:
+            pending_signature = current_signature
+        else:
+            pending_signature = None
         last_wall = time.time()
         last_mono = time.monotonic()
-        input_signature = current_signature
     if hotkey_listener:
         hotkey_listener.stop()
     append_log(config.log_path, "daemon stopped")
