@@ -27,7 +27,10 @@ class LinuxDesktopPlatform(DesktopPlatform):
         return None
 
     def session_type(self) -> str:
-        return os.environ.get("XDG_SESSION_TYPE", "unknown")
+        # Wayland-first: assume Wayland when XDG_SESSION_TYPE is unset, which is
+        # the case under the systemd user service (it doesn't inherit it). wl-copy
+        # only needs XDG_RUNTIME_DIR, which the service does get.
+        return (os.environ.get("XDG_SESSION_TYPE") or "wayland").lower()
 
     def copy_text(self, text: str) -> tuple[bool, str]:
         session_type = self.session_type().lower()

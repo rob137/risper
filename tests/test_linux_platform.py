@@ -9,6 +9,27 @@ from unittest.mock import call, patch
 from risper.platforms.linux import LinuxDesktopPlatform
 
 
+class LinuxSessionTypeTests(unittest.TestCase):
+    def test_defaults_to_wayland_when_env_is_unset(self) -> None:
+        platform = LinuxDesktopPlatform()
+
+        with patch.dict(os.environ):
+            os.environ.pop("XDG_SESSION_TYPE", None)
+            self.assertEqual(platform.session_type(), "wayland")
+
+    def test_defaults_to_wayland_when_env_is_empty(self) -> None:
+        platform = LinuxDesktopPlatform()
+
+        with patch.dict(os.environ, {"XDG_SESSION_TYPE": ""}):
+            self.assertEqual(platform.session_type(), "wayland")
+
+    def test_lowercases_env_value(self) -> None:
+        platform = LinuxDesktopPlatform()
+
+        with patch.dict(os.environ, {"XDG_SESSION_TYPE": "X11"}):
+            self.assertEqual(platform.session_type(), "x11")
+
+
 class LinuxPasteTests(unittest.TestCase):
     def test_wayland_auto_uses_wtype_when_available(self) -> None:
         platform = LinuxDesktopPlatform()
