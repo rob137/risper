@@ -15,7 +15,6 @@ transcription_command = ""
 model = "base.en"
 language = "en"
 paste_mode = "clipboard_only"
-show_overlay = false
 play_sounds = false
 double_alt_enabled = false
 double_alt_window_ms = 350

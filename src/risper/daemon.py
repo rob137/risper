@@ -108,8 +108,6 @@ def main() -> int:
     append_log(config.log_path, f"daemon started; recovered={recovered}")
     if recovered:
         notify("♻ Risper recovered sessions", f"{recovered} incomplete session(s) marked recovered.")
-    if config.show_overlay:
-        append_log(config.log_path, "status-window ignored; standalone monitor is disabled")
     hotkey_listener = _start_double_alt_listener(config)
     last_wall = time.time()
     last_mono = time.monotonic()

@@ -74,7 +74,6 @@ transcription_command = ""
 model = "base.en"
 language = "en"
 paste_mode = "clipboard_only"
-show_overlay = false
 play_sounds = true
 double_alt_enabled = false
 double_alt_window_ms = 350
@@ -179,9 +178,11 @@ When Double Alt is enabled, tapping it during transcription cancels the active t
 
 ## Current Environment Findings
 
+Dated snapshot, last verified 2026-07-06.
+
 - Ubuntu 24.04.4 LTS, GNOME 46, Wayland.
-- `pw-record`, `wl-copy`, `wtype`, `notify-send`, `gio`, GTK 3, and `canberra-gtk-play` are available.
-- `pactl`, `ffmpeg`, `xdotool`, `ydotool`, `dotool`, AppIndicator, `pip`, `faster-whisper`, and Python `whisper` are not available.
+- `pw-record`, `wl-copy`, `wtype`, `ydotool`, `notify-send`, `gio`, GTK 3, and `canberra-gtk-play` are available.
+- `pactl`, `ffmpeg`, `xdotool`, `dotool`, AppIndicator, `pip`, `faster-whisper`, and Python `whisper` are not available.
 - whisper.cpp and `ggml-base.en.bin` are installed under `~/.local/share/risper/engines`.
 - Automatic paste on GNOME Wayland was tested and removed from the default workflow because helper success did not reliably mean text appeared in the intended target. The transcript is copied to the clipboard instead.
 - True tray/status-window UI is not part of the default workflow. Ubuntu notifications and the GNOME microphone indicator provide the lightweight feedback.
