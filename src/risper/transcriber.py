@@ -38,6 +38,7 @@ def transcribe(
         clean_no_txt=str(clean_path.with_suffix("")),
         model=profile.model,
         language=profile.language,
+        prompt=profile.prompt,
     )
     rendered = str(Path(rendered).expanduser()) if rendered.startswith("~") and " " not in rendered else rendered
     process = subprocess.Popen(

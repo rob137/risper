@@ -15,6 +15,7 @@ class ModelProfile:
     model: str
     language: str
     command: str
+    prompt: str = ""
 
 
 DEFAULT_MODELS = """# Risper model profiles.
@@ -25,7 +26,11 @@ DEFAULT_MODELS = """# Risper model profiles.
 # engine = "whisper.cpp"
 # model = "base.en"
 # language = "en"
-# command = "/path/to/whisper-cli -m /path/to/model.bin -f {audio} -l {language} -nt -otxt -of {raw_no_txt}"
+# command = "/path/to/whisper-cli -m /path/to/model.bin -f {audio} -l {language} --prompt \\"{prompt}\\" -nt -otxt -of {raw_no_txt}"
+#
+# An optional `prompt` biases decoding toward the words it lists (proper nouns,
+# names, jargon). It is rendered into the command's {prompt} placeholder. Keep it
+# a short comma list, not a paragraph. Only whisper.cpp uses it.
 """
 
 
@@ -52,6 +57,7 @@ def load_profiles(config: Config) -> dict[str, ModelProfile]:
             model=str(data.get("model", profile_id)),
             language=str(data.get("language", config.language)),
             command=command,
+            prompt=str(data.get("prompt", "")),
         )
     if not profiles and config.transcription_command.strip():
         profiles.setdefault(
@@ -92,6 +98,8 @@ def write_profile(config: Config, profile: ModelProfile, select: bool = False) -
         lines.append(f"model = {json.dumps(item.model)}")
         lines.append(f"language = {json.dumps(item.language)}")
         lines.append(f"command = {json.dumps(item.command)}")
+        if item.prompt:
+            lines.append(f"prompt = {json.dumps(item.prompt)}")
         lines.append("")
     config.models_path.write_text("\n".join(lines).rstrip() + "\n", encoding="utf-8")
     if select:
