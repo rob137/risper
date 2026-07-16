@@ -51,7 +51,7 @@ For proper mutation testing options, see `docs/mutation-testing.md`.
 Performance measurements:
 
 ```bash
-risper-benchmark last --profile whispercpp-base-en --profile parakeet-tdt-0-6b-v3
+risper-benchmark last --profile whispercpp-base-en
 ```
 
 See `docs/performance.md`.
@@ -111,15 +111,15 @@ risper-models select whispercpp-base-en
 Add another local backend profile:
 
 ```bash
-risper-models add-external parakeet-local \
-  --engine parakeet \
-  --model parakeet-some-local-model \
+risper-models add-external my-engine \
+  --engine some-engine \
+  --model some-local-model \
   --language en \
-  --command "/path/to/local-parakeet-wrapper --model {model} --audio {audio}" \
+  --command "/path/to/local-wrapper --model {model} --audio {audio}" \
   --select
 ```
 
-The wrapper can either print transcript text to stdout or write `{raw}` directly. Risper does not care whether the backend is whisper.cpp, faster-whisper, Parakeet, or a future local engine as long as it is a local command.
+The wrapper can either print transcript text to stdout or write `{raw}` directly. Risper does not care whether the backend is whisper.cpp, faster-whisper, or a future local engine as long as it is a local command.
 
 To install or refresh whisper.cpp locally:
 
@@ -127,15 +127,6 @@ To install or refresh whisper.cpp locally:
 cd ~/personal/risper
 ./scripts/install-whispercpp.sh base.en
 ```
-
-Parakeet profile template:
-
-```bash
-./scripts/add-parakeet-profile.sh
-risper-models list
-```
-
-This registers `nvidia/parakeet-tdt-0.6b-v3` through `scripts/parakeet-nemo-wrapper.py`. On this laptop the local NeMo/PyTorch environment has been installed and Parakeet is usable, but it is much slower and heavier than whisper.cpp on CPU. See `docs/parakeet.md`.
 
 ## Data
 

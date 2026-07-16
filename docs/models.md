@@ -62,4 +62,4 @@ risper-models add-external my-local-engine \
   --select
 ```
 
-For Parakeet or any newer model family, the preferred integration is a small local wrapper command that normalizes its CLI/API to this contract.
+For any newer model family, the preferred integration is a small local wrapper command that normalizes its CLI/API to this contract.

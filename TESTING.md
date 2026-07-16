@@ -58,20 +58,13 @@ PYTHONPATH=src python3 -m risper.retranscribe last
 PYTHONPATH=src python3 -m risper.model_cli list
 PYTHONPATH=src python3 -m risper.status_window
 PYTHONPATH=src python3 -m risper.paste_test
-PYTHONPATH=src python3 -m risper.benchmark last --profile whispercpp-base-en --profile parakeet-tdt-0-6b-v3
+PYTHONPATH=src python3 -m risper.benchmark last --profile whispercpp-base-en
 ```
 
 Inspect the latest diagnostic trail:
 
 ```bash
 PYTHONPATH=src python3 -m risper.diagnose last
-```
-
-Parakeet profile check:
-
-```bash
-./scripts/add-parakeet-profile.sh
-risper-models list
 ```
 
 Daemon recovery smoke test:
