@@ -51,7 +51,7 @@ For proper mutation testing options, see `docs/mutation-testing.md`.
 Performance measurements:
 
 ```bash
-risper-benchmark last --profile whispercpp-base-en
+risper-benchmark last --profile whispercpp-small-en
 ```
 
 See `docs/performance.md`.
@@ -68,10 +68,10 @@ Important settings:
 
 ```toml
 sessions_dir = "~/.local/share/risper/sessions"
-selected_model = "whispercpp-base-en"
+selected_model = "whispercpp-small-en"
 transcription_engine = "external"
 transcription_command = ""
-model = "base.en"
+model = "small.en"
 language = "en"
 paste_mode = "clipboard_only"
 play_sounds = true
@@ -89,14 +89,14 @@ Model profiles live in:
 Each profile is just a local command with metadata. It can use placeholders:
 
 ```text
-{audio} {raw} {raw_no_txt} {clean} {clean_no_txt} {model} {language}
+{audio} {raw} {raw_no_txt} {clean} {clean_no_txt} {model} {language} {prompt}
 ```
 
 Installed whisper.cpp shape:
 
 ```toml
 transcription_engine = "whisper.cpp"
-transcription_command = "/home/robert-kirby/.local/share/risper/engines/whisper.cpp/build/bin/whisper-cli -m /home/robert-kirby/.local/share/risper/engines/whisper.cpp/models/ggml-base.en.bin -f {audio} -l {language} -nt -otxt -of {raw_no_txt}"
+transcription_command = "/home/robert-kirby/.local/share/risper/engines/whisper.cpp/build/bin/whisper-cli -m /home/robert-kirby/.local/share/risper/engines/whisper.cpp/models/ggml-small.en.bin -f {audio} -l {language} -t 8 -nt -otxt -of {raw_no_txt}"
 ```
 
 If the command writes `{raw}` or `{clean}` itself, Risper preserves those files. If it prints transcript text to stdout, Risper writes both `transcript.raw.txt` and `transcript.clean.txt`.
@@ -105,7 +105,7 @@ List/select profiles:
 
 ```bash
 risper-models list
-risper-models select whispercpp-base-en
+risper-models select whispercpp-small-en
 ```
 
 Add another local backend profile:
@@ -125,7 +125,7 @@ To install or refresh whisper.cpp locally:
 
 ```bash
 cd ~/personal/risper
-./scripts/install-whispercpp.sh base.en
+./scripts/install-whispercpp.sh small.en
 ```
 
 ## Data
@@ -174,7 +174,7 @@ Dated snapshot, last verified 2026-07-06.
 - Ubuntu 24.04.4 LTS, GNOME 46, Wayland.
 - `pw-record`, `wl-copy`, `wtype`, `ydotool`, `notify-send`, `gio`, GTK 3, and `canberra-gtk-play` are available.
 - `pactl`, `ffmpeg`, `xdotool`, `dotool`, AppIndicator, `pip`, `faster-whisper`, and Python `whisper` are not available.
-- whisper.cpp and `ggml-base.en.bin` are installed under `~/.local/share/risper/engines`.
+- whisper.cpp with `ggml-small.en.bin` (default) and `ggml-base.en.bin` (fast fallback) is installed under `~/.local/share/risper/engines`.
 - Automatic paste on GNOME Wayland was tested and removed from the default workflow because helper success did not reliably mean text appeared in the intended target. The transcript is copied to the clipboard instead.
 - True tray/status-window UI is not part of the default workflow. Ubuntu notifications and the GNOME microphone indicator provide the lightweight feedback.
 

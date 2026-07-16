@@ -22,3 +22,8 @@
 ## 2026-07-16 Remove Parakeet support
 
 - Parakeet support is removed: the NeMo wrapper, profile-add script, its test, and `docs/parakeet.md` are deleted. whisper.cpp is the only bundled engine. The profile system stays engine-agnostic, so a wrapper for any engine can be added back if and when there is a real reason. Rationale: this is a single-user tool on an AMD/CPU machine where Parakeet was much slower and heavier than whisper.cpp, so the extra engine was complication without payoff.
+
+## 2026-07-16 Default model is small.en with -t 8
+
+- The selected profile moves from `whispercpp-base-en` to `whispercpp-small-en`, and both profiles pass `-t 8` (whisper-cli defaults to 4 threads, half the physical cores). Benchmarks on saved sessions showed small.en costs about 3x the wall time (~3.4s vs ~1s on a short clip) but fixed meaning-level transcription errors on real dictation. base.en stays registered as the fast fallback. Numbers in `docs/performance.md`.
+- A Vulkan build for the Radeon 780M iGPU was considered and parked: for short dictation clips the model-load and GPU-init overhead eats the compute saving, and it adds a platform-sensitive build to maintain.

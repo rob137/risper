@@ -18,7 +18,7 @@ Model profiles live in:
 Config selects one:
 
 ```toml
-selected_model = "whispercpp-base-en"
+selected_model = "whispercpp-small-en"
 ```
 
 Profile shape:
@@ -41,6 +41,7 @@ Placeholders:
 {clean_no_txt}
 {model}
 {language}
+{prompt}
 ```
 
 Backend contract:

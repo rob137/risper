@@ -84,6 +84,29 @@ class BenchmarkTests(unittest.TestCase):
         self.assertEqual(result["returncode"], 0)
         self.assertEqual(result["transcript_preview"], "clean transcript from file")
 
+    def test_run_profile_renders_prompt_placeholder(self) -> None:
+        audio = self.root / "audio.wav"
+        script = self.root / "transcribe.py"
+        audio.write_bytes(b"fake audio")
+        script.write_text(
+            "import sys\n"
+            "print(sys.argv[1])\n",
+            encoding="utf-8",
+        )
+        profile = ModelProfile(
+            "bench",
+            "test",
+            "test-model",
+            "en",
+            f'/usr/bin/python3 {script} "{{prompt}}"',
+            prompt="bias words",
+        )
+
+        result = _run_profile(profile, audio)
+
+        self.assertEqual(result["returncode"], 0)
+        self.assertEqual(result["transcript_preview"], "bias words")
+
     def test_run_profile_reports_failed_command_without_raising(self) -> None:
         audio = self.root / "audio.wav"
         script = self.root / "fail.py"

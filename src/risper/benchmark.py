@@ -27,6 +27,7 @@ def _run_profile(profile, audio_path: Path) -> dict:
             clean_no_txt=str(clean_path.with_suffix("")),
             model=profile.model,
             language=profile.language,
+            prompt=profile.prompt,
         )
         before = resource.getrusage(resource.RUSAGE_CHILDREN)
         started = time.monotonic()
