@@ -173,7 +173,7 @@ class LinuxPasteTests(unittest.TestCase):
                     stderr=subprocess.DEVNULL,
                 ),
                 call(
-                    ["canberra-gtk-play", "-i", "message", "-V", "-18", "-d", "Risper transcription_progress"],
+                    ["canberra-gtk-play", "-i", "bell", "-V", "-6", "-d", "Risper transcription_progress"],
                     stdout=subprocess.DEVNULL,
                     stderr=subprocess.DEVNULL,
                 ),

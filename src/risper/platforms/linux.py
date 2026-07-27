@@ -165,19 +165,19 @@ class LinuxDesktopPlatform(DesktopPlatform):
     def play_sound(self, kind: str) -> None:
         if not self._command_exists("canberra-gtk-play"):
             return
-        event = {
-            "recording_start": "message-new-instant",
-            "transcription_start": "service-login",
-            "transcription_progress": "message",
-            "success": "complete",
-            "cancel": "service-logout",
-            "error": "dialog-error",
+        event, volume = {
+            "recording_start": ("message-new-instant", "-18"),
+            "transcription_start": ("service-login", "-18"),
+            "transcription_progress": ("bell", "-6"),
+            "success": ("complete", "-18"),
+            "cancel": ("service-logout", "-18"),
+            "error": ("dialog-error", "-18"),
             # Backwards-compatible aliases for older callers or scripts.
-            "start": "message-new-instant",
-            "stop": "complete",
-        }.get(kind, "message")
+            "start": ("message-new-instant", "-18"),
+            "stop": ("complete", "-18"),
+        }.get(kind, ("message", "-18"))
         subprocess.Popen(
-            ["canberra-gtk-play", "-i", event, "-V", "-18", "-d", f"Risper {kind}"],
+            ["canberra-gtk-play", "-i", event, "-V", volume, "-d", f"Risper {kind}"],
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
         )
