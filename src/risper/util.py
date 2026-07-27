@@ -51,7 +51,7 @@ def notify(title: str, body: str = "") -> None:
 def notify_heartbeat(
     title: str,
     body: str,
-    interval: float = 10.0,
+    interval: float = 5.0,
     on_beat: Callable[[], None] | None = None,
 ) -> Iterator[None]:
     stop = threading.Event()
