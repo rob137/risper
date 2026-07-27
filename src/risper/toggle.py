@@ -18,7 +18,7 @@ from .transcription_state import (
     start_transcription_state,
 )
 from .transcriber import transcribe
-from .util import append_log, notify
+from .util import append_log, notify, notify_heartbeat
 
 
 def _finish_session(config, metadata: dict) -> int:
@@ -50,18 +50,24 @@ def _finish_session(config, metadata: dict) -> int:
     )
     append_log(status_log, "starting transcription")
     start_transcription_state(config, metadata, profile.id)
-    notify("⏳ Risper transcribing", f"Using {profile.id}.")
+    transcribing_title = "📝 Transcribing speech"
+    notify(transcribing_title, f"Using {profile.id}.")
     play(config, "transcription_start")
 
     try:
-        transcript = transcribe(
-            config,
-            Path(str(metadata["audio_path"])),
-            Path(str(metadata["transcript_raw_path"])),
-            Path(str(metadata["transcript_clean_path"])),
-            profile=profile,
-            on_process_start=lambda pid: set_transcription_worker_pid(config, pid),
-        )
+        with notify_heartbeat(
+            transcribing_title,
+            f"Using {profile.id}.",
+            on_beat=lambda: play(config, "transcription_progress"),
+        ):
+            transcript = transcribe(
+                config,
+                Path(str(metadata["audio_path"])),
+                Path(str(metadata["transcript_raw_path"])),
+                Path(str(metadata["transcript_clean_path"])),
+                profile=profile,
+                on_process_start=lambda pid: set_transcription_worker_pid(config, pid),
+            )
     except Exception as exc:
         message = f"transcription failed: {exc}"
         append_log(error_log, message)

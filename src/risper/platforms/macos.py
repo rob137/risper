@@ -37,6 +37,7 @@ class MacOSDesktopPlatform(DesktopPlatform):
         sound = {
             "recording_start": "Pop",
             "transcription_start": "Tink",
+            "transcription_progress": "Morse",
             "success": "Hero",
             "cancel": "Bottle",
             "error": "Glass",

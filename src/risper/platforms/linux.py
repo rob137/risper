@@ -168,6 +168,7 @@ class LinuxDesktopPlatform(DesktopPlatform):
         event = {
             "recording_start": "message-new-instant",
             "transcription_start": "service-login",
+            "transcription_progress": "message",
             "success": "complete",
             "cancel": "service-logout",
             "error": "dialog-error",

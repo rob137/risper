@@ -48,7 +48,7 @@ class ToggleFinishTests(unittest.TestCase):
             ),
             patch("risper.toggle.transcribe", return_value="hello"),
             patch("risper.toggle.copy_text", return_value=(True, "copied")),
-            patch("risper.toggle.notify"),
+            patch("risper.toggle.notify") as notify,
             patch("risper.toggle.play") as play,
         ):
             code = _finish_session(self.config, metadata)
@@ -64,6 +64,13 @@ class ToggleFinishTests(unittest.TestCase):
         self.assertEqual(
             play.call_args_list,
             [call(self.config, "transcription_start"), call(self.config, "success")],
+        )
+        self.assertEqual(
+            notify.call_args_list,
+            [
+                call("📝 Transcribing speech", "Using test."),
+                call("✅ Risper copied", "Transcript is on the clipboard."),
+            ],
         )
 
     def test_main_cancels_active_transcription_instead_of_starting_recording(self) -> None:

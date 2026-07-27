@@ -2,10 +2,12 @@ from __future__ import annotations
 
 import json
 import os
+import threading
 import time
+from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable, Iterator
 
 
 def utc_now_iso() -> str:
@@ -43,6 +45,33 @@ def notify(title: str, body: str = "") -> None:
     from .platforms import current_platform
 
     current_platform().notify(title, body)
+
+
+@contextmanager
+def notify_heartbeat(
+    title: str,
+    body: str,
+    interval: float = 10.0,
+    on_beat: Callable[[], None] | None = None,
+) -> Iterator[None]:
+    stop = threading.Event()
+    started = time.monotonic()
+
+    def beat() -> None:
+        while not stop.wait(interval):
+            elapsed = int(time.monotonic() - started)
+            notify(title, f"{body} {elapsed}s elapsed.")
+            if on_beat:
+                on_beat()
+
+    thread = threading.Thread(target=beat, daemon=True)
+    thread.start()
+    try:
+        yield
+    finally:
+        stop.set()
+        # Wait out any in-flight beat so it cannot replace the notification sent after this block.
+        thread.join(timeout=5)
 
 
 def pid_alive(pid: int) -> bool:

@@ -149,7 +149,14 @@ class LinuxPasteTests(unittest.TestCase):
             patch.object(platform, "_command_exists", return_value=True),
             patch("risper.platforms.linux.subprocess.Popen") as popen,
         ):
-            for kind in ("recording_start", "transcription_start", "success", "cancel", "error"):
+            for kind in (
+                "recording_start",
+                "transcription_start",
+                "transcription_progress",
+                "success",
+                "cancel",
+                "error",
+            ):
                 platform.play_sound(kind)
 
         self.assertEqual(
@@ -162,6 +169,11 @@ class LinuxPasteTests(unittest.TestCase):
                 ),
                 call(
                     ["canberra-gtk-play", "-i", "service-login", "-V", "-18", "-d", "Risper transcription_start"],
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                ),
+                call(
+                    ["canberra-gtk-play", "-i", "message", "-V", "-18", "-d", "Risper transcription_progress"],
                     stdout=subprocess.DEVNULL,
                     stderr=subprocess.DEVNULL,
                 ),
