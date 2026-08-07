@@ -8,7 +8,7 @@ from .clipboard import copy_text
 from .config import load_config
 from .models import active_profile
 from .paste import attempt_paste
-from .sessions import append_event, find_session, update_metadata
+from .sessions import append_event, find_session, missing_audio_message, update_metadata
 from .sounds import play
 from .transcriber import transcribe
 from .util import append_log, notify
@@ -23,7 +23,7 @@ def retranscribe_session(session_id: str, copy: bool = False, paste: bool = Fals
 
     audio_path = Path(str(metadata["audio_path"]))
     if not audio_path.exists():
-        print(f"Audio missing: {audio_path}", file=sys.stderr)
+        print(missing_audio_message(metadata), file=sys.stderr)
         return 1
 
     session_dir = audio_path.parent

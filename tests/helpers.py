@@ -18,7 +18,7 @@ paste_mode = "clipboard_only"
 play_sounds = false
 double_alt_enabled = false
 double_alt_window_ms = 350
-retention = "never"
+audio_retention = "never"
 """.lstrip(),
         encoding="utf-8",
     )

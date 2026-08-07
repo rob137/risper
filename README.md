@@ -12,7 +12,7 @@ Risper deliberately leaves completed transcripts on the clipboard instead of try
 - `risper-daemon`: marks incomplete sessions recovered on startup and stays alive for systemd.
 - `risper-open`: opens recordings, last session, last transcript, last audio, config, or copies the last transcript.
 - `risper-paste-test`: diagnostic helper for paste experiments with a real focused GTK text field.
-- `risper-history`: prints recent sessions and can open, play, copy, retranscribe, or delete a session by id.
+- `risper-history`: prints recent sessions and can open, play, copy, retranscribe, or delete a session by id, and `--prune-audio` applies `audio_retention` on demand.
 - `risper-retranscribe`: retranscribes a saved session by id, or the last session by default.
 - `risper-models`: lists, selects, and adds local transcription model profiles.
 - `risper-status`: opens the GTK control/history window.
@@ -77,7 +77,7 @@ paste_mode = "clipboard_only"
 play_sounds = true
 double_alt_enabled = false
 double_alt_window_ms = 350
-retention = "never"
+audio_retention = "never" # never | <count>h | <count>d | <count>w
 ```
 
 Model profiles live in:

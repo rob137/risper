@@ -27,3 +27,9 @@
 
 - The selected profile moves from `whispercpp-base-en` to `whispercpp-small-en`, and both profiles pass `-t 8` (whisper-cli defaults to 4 threads, half the physical cores). Benchmarks on saved sessions showed small.en costs about 3x the wall time (~3.4s vs ~1s on a short clip) but fixed meaning-level transcription errors on real dictation. base.en stays registered as the fast fallback. Numbers in `docs/performance.md`.
 - A Vulkan build for the Radeon 780M iGPU was considered and parked: for short dictation clips the model-load and GPU-init overhead eats the compute saving, and it adds a platform-sensitive build to maintain.
+
+## 2026-08-06 Audio retention is enforced
+
+- Manual pruning finally hurt, so the deferral recorded on 2026-07-06 ends here. 1562 sessions had accumulated 1.82 GB of `audio.wav` since 6 May while their transcripts and metadata came to 5.6 MB, and the `retention` key was parsed into `Config` and then read by nothing. A setting that describes a policy nobody enforces is worse than no setting.
+- The key is now `audio_retention`, accepting `never` or a count with a unit (`7d`, `12h`, `2w`), and it means what it says: audio past the window is deleted, transcripts and metadata are kept forever. The daemon prunes at startup and hourly, `risper-history --prune-audio` does it on demand, and each pruned session records `audio_pruned_at` so `--retranscribe` can say why the wav is gone rather than just reporting it missing.
+- The shipped default stays `never`. Deleting a new user's recordings without them asking is not a sensible out-of-the-box behaviour, and the field is now honest either way.

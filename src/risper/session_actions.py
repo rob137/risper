@@ -5,7 +5,7 @@ from pathlib import Path
 from .clipboard import copy_text
 from .config import Config
 from .platforms import current_platform
-from .sessions import find_session
+from .sessions import find_session, missing_audio_message
 
 
 def transcript_path(metadata: dict) -> Path | None:
@@ -35,7 +35,7 @@ def open_session(metadata: dict) -> tuple[bool, str]:
 def play_audio(metadata: dict) -> tuple[bool, str]:
     audio_path = Path(str(metadata["audio_path"]))
     if not audio_path.exists():
-        return False, f"Audio missing: {audio_path}"
+        return False, missing_audio_message(metadata)
     return current_platform().open_path(audio_path)
 
 

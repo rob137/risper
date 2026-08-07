@@ -166,7 +166,7 @@ model = "legacy-model"
 language = "cy"
 paste_mode = "clipboard_only"
 play_sounds = false
-retention = "never"
+audio_retention = "never"
 """.lstrip(),
             encoding="utf-8",
         )

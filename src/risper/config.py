@@ -41,7 +41,7 @@ class Config:
     play_sounds: bool
     double_alt_enabled: bool
     double_alt_window_ms: int
-    retention: str
+    audio_retention_seconds: float | None
 
 
 DEFAULT_CONFIG = """# Risper user config.
@@ -56,8 +56,23 @@ paste_mode = "clipboard_only" # clipboard_only | auto | xdotool | wtype | ydotoo
 play_sounds = true
 double_alt_enabled = false
 double_alt_window_ms = 350
-retention = "never"
+audio_retention = "never" # never | <count>h | <count>d | <count>w; transcripts are always kept
 """
+
+
+AUDIO_RETENTION_UNITS = {"h": 3600, "d": 86400, "w": 604800}
+
+
+def parse_audio_retention(value: str) -> float | None:
+    # None means keep audio forever, including when the value is unreadable.
+    text = value.strip().lower()
+    if not text or text[-1] not in AUDIO_RETENTION_UNITS:
+        return None
+    try:
+        count = float(text[:-1])
+    except ValueError:
+        return None
+    return count * AUDIO_RETENTION_UNITS[text[-1]] if count > 0 else None
 
 
 def config_path() -> Path:
@@ -126,7 +141,7 @@ def load_config() -> Config:
         play_sounds=bool(raw.get("play_sounds", True)),
         double_alt_enabled=bool(raw.get("double_alt_enabled", False)),
         double_alt_window_ms=double_alt_window_ms,
-        retention=str(raw.get("retention", "never")),
+        audio_retention_seconds=parse_audio_retention(str(raw.get("audio_retention", "never"))),
     )
 
 

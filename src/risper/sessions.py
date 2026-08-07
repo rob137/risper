@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import time
 from pathlib import Path
 from typing import Any
 
@@ -130,6 +131,39 @@ def find_session(config: Config, session_id: str) -> dict[str, Any] | None:
         if metadata.get("session_id") == session_id:
             return metadata
     return None
+
+
+def missing_audio_message(metadata: dict[str, Any]) -> str:
+    audio = Path(str(metadata["audio_path"]))
+    pruned_at = metadata.get("audio_pruned_at")
+    if pruned_at:
+        return f"Audio pruned at {pruned_at} under audio_retention: {audio}"
+    return f"Audio missing: {audio}"
+
+
+def prune_expired_audio(config: Config) -> int:
+    if config.audio_retention_seconds is None:
+        return 0
+    cutoff = time.time() - config.audio_retention_seconds
+    pruned = 0
+    for metadata in all_sessions(config):
+        audio = Path(str(metadata["audio_path"]))
+        try:
+            expired = audio.stat().st_mtime < cutoff
+        except OSError:
+            continue
+        if not expired:
+            continue
+        audio.unlink()
+        update_metadata(metadata, audio_pruned_at=utc_now_iso())
+        append_event(
+            metadata,
+            "audio.pruned",
+            audio_path=str(audio),
+            retention_seconds=config.audio_retention_seconds,
+        )
+        pruned += 1
+    return pruned
 
 
 def mark_incomplete_recordings_recovered(config: Config) -> int:

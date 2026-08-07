@@ -7,7 +7,7 @@ from pathlib import Path
 from .config import load_config
 from .platforms import current_platform
 from .session_actions import copy_transcript, open_session, play_audio, transcript_preview
-from .sessions import all_sessions
+from .sessions import all_sessions, prune_expired_audio
 
 
 def _preview(metadata: dict) -> str:
@@ -41,11 +41,23 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--copy", dest="copy_session", help="Copy a session transcript by id")
     parser.add_argument("--retranscribe", dest="retranscribe_session", help="Retranscribe a session by id")
     parser.add_argument("--delete", dest="delete_session", help="Move a session to trash by id")
+    parser.add_argument(
+        "--prune-audio",
+        action="store_true",
+        help="Delete audio past audio_retention now, keeping transcripts",
+    )
     args = parser.parse_args(argv)
 
     config = load_config()
     sessions = all_sessions(config)
     by_id = {str(item.get("session_id")): item for item in sessions}
+
+    if args.prune_audio:
+        if config.audio_retention_seconds is None:
+            print("audio_retention is 'never'; nothing to prune.", file=sys.stderr)
+            return 1
+        print(f"Pruned audio from {prune_expired_audio(config)} session(s).")
+        return 0
 
     if args.open_session:
         metadata = by_id.get(args.open_session)

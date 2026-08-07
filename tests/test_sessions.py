@@ -3,11 +3,12 @@ from __future__ import annotations
 import json
 import os
 import tempfile
+import time
 import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from risper.config import load_config
+from risper.config import Config, load_config
 from risper.sessions import (
     append_event,
     all_sessions,
@@ -16,6 +17,7 @@ from risper.sessions import (
     find_session,
     load_session,
     mark_incomplete_recordings_recovered,
+    prune_expired_audio,
     read_events,
     update_metadata,
 )
@@ -143,6 +145,56 @@ class SessionTests(unittest.TestCase):
         self.assertEqual(find_session(self.config, "last")["session_id"], second["session_id"])
         self.assertEqual(find_session(self.config, first["session_id"])["session_id"], first["session_id"])
         self.assertIsNone(find_session(self.config, "missing"))
+
+    def _write_audio(self, metadata: dict, age_seconds: float) -> Path:
+        audio = Path(metadata["audio_path"])
+        audio.write_bytes(b"RIFF")
+        stamp = time.time() - age_seconds
+        os.utime(audio, (stamp, stamp))
+        return audio
+
+    def test_prune_keeps_everything_when_retention_is_never(self) -> None:
+        metadata = create_session(self.config)
+        audio = self._write_audio(metadata, age_seconds=400 * 86400)
+
+        self.assertEqual(prune_expired_audio(self.config), 0)
+        self.assertTrue(audio.exists())
+
+    def test_prune_deletes_expired_audio_and_keeps_transcripts(self) -> None:
+        config = self._config_with_retention("7d")
+        old = create_session(config)
+        recent = create_session(config)
+        old_audio = self._write_audio(old, age_seconds=8 * 86400)
+        recent_audio = self._write_audio(recent, age_seconds=6 * 86400)
+        transcript = Path(old["transcript_clean_path"])
+        transcript.write_text("kept", encoding="utf-8")
+
+        self.assertEqual(prune_expired_audio(config), 1)
+
+        self.assertFalse(old_audio.exists())
+        self.assertTrue(recent_audio.exists())
+        self.assertEqual(transcript.read_text(encoding="utf-8"), "kept")
+        persisted = json.loads(Path(old["audio_path"]).parent.joinpath("metadata.json").read_text(encoding="utf-8"))
+        self.assertIn("audio_pruned_at", persisted)
+        self.assertEqual(read_events(old)[-1]["event"], "audio.pruned")
+
+    def test_prune_is_idempotent_and_ignores_sessions_without_audio(self) -> None:
+        config = self._config_with_retention("1h")
+        metadata = create_session(config)
+        self._write_audio(metadata, age_seconds=2 * 3600)
+
+        self.assertEqual(prune_expired_audio(config), 1)
+        self.assertEqual(prune_expired_audio(config), 0)
+
+    def _config_with_retention(self, value: str) -> Config:
+        path = Path(self.config.config_path)
+        path.write_text(
+            path.read_text(encoding="utf-8").replace(
+                'audio_retention = "never"', f'audio_retention = "{value}"'
+            ),
+            encoding="utf-8",
+        )
+        return load_config()
 
     def test_incomplete_recording_is_marked_recovered(self) -> None:
         metadata = create_session(self.config)

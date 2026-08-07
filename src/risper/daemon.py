@@ -10,12 +10,13 @@ from typing import Any
 
 from .config import load_config
 from .platforms import current_platform
-from .sessions import mark_incomplete_recordings_recovered
+from .sessions import mark_incomplete_recordings_recovered, prune_expired_audio
 from .util import append_log, notify
 
 
 running = True
 RESUME_GAP_SECONDS = 30.0
+PRUNE_INTERVAL_SECONDS = 3600.0
 
 
 def _stop(_signum, _frame) -> None:
@@ -100,14 +101,27 @@ def _restart_double_alt_listener(config, listener, reason: str):
     return _start_double_alt_listener(config)
 
 
+def _prune_audio(config) -> None:
+    pruned = prune_expired_audio(config)
+    if pruned:
+        append_log(config.log_path, f"pruned audio from {pruned} expired session(s)")
+
+
 def main() -> int:
     signal.signal(signal.SIGTERM, _stop)
     signal.signal(signal.SIGINT, _stop)
     config = load_config()
     recovered = mark_incomplete_recordings_recovered(config)
-    append_log(config.log_path, f"daemon started; recovered={recovered}")
+    retention = config.audio_retention_seconds
+    append_log(
+        config.log_path,
+        f"daemon started; recovered={recovered}; "
+        f"audio_retention={'never' if retention is None else f'{retention:.0f}s'}",
+    )
     if recovered:
         notify("♻ Risper recovered sessions", f"{recovered} incomplete session(s) marked recovered.")
+    _prune_audio(config)
+    last_prune = time.time()
     hotkey_listener = _start_double_alt_listener(config)
     last_wall = time.time()
     last_mono = time.monotonic()
@@ -133,6 +147,9 @@ def main() -> int:
             pending_signature = None
         last_wall = time.time()
         last_mono = time.monotonic()
+        if last_wall - last_prune >= PRUNE_INTERVAL_SECONDS:
+            _prune_audio(config)
+            last_prune = last_wall
     if hotkey_listener:
         hotkey_listener.stop()
     append_log(config.log_path, "daemon stopped")
