@@ -27,7 +27,7 @@ Rules for adding a platform:
 
 1. Do not put platform commands directly in `toggle.py`, `retranscribe.py`, `history.py`, or `sessions.py`.
 2. Add desktop behavior in `platforms/<platform>.py`.
-3. Add audio capture behavior as a `RecorderBackend`.
+3. Add audio capture behavior as a `RecorderBackend`. Declare which sources it can capture in `supported_sources`; a backend that cannot reach the system output should list `mic` only, and `--system` will refuse rather than record half a call.
 4. Keep transcription as a model profile command unless a backend needs a real Python API wrapper.
 5. Keep every session file-compatible across platforms.
 

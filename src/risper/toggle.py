@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import argparse
 import sys
 from pathlib import Path
 
@@ -8,6 +9,7 @@ from .clipboard import copy_text
 from .config import load_config
 from .models import active_profile
 from .recorder import current_recording, start_recording, stop_recording
+from .recorders import MIC, SYSTEM
 from .sessions import append_event, update_metadata
 from .sounds import play
 from .transcription_state import (
@@ -126,7 +128,16 @@ def _finish_session(config, metadata: dict) -> int:
     return 0
 
 
-def main() -> int:
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description="Start, stop, or cancel a Risper recording.")
+    parser.add_argument(
+        "--system",
+        action="store_true",
+        help="Also capture computer output, for recording a call with everyone's consent.",
+    )
+    args = parser.parse_args(argv)
+    sources = (MIC, SYSTEM) if args.system else (MIC,)
+
     config = load_config()
     transcription = current_transcription(config)
     if transcription:
@@ -135,22 +146,26 @@ def main() -> int:
         play(config, "cancel")
         return 0
 
+    # sources come from the state file, so any toggle can stop any recording
     state = current_recording(config)
     if state:
         metadata = stop_recording(config, state)
         return _finish_session(config, metadata)
 
     try:
-        state = start_recording(config)
+        state = start_recording(config, sources)
     except Exception as exc:
         notify("⚠ Risper could not start", str(exc))
         print(f"risper-toggle: {exc}", file=sys.stderr)
         play(config, "error")
         return 1
 
-    notify("🎙 Risper listening", "Run risper-toggle again to stop.")
+    if args.system:
+        notify("🎙 Risper listening to mic and computer", "Run risper-toggle again to stop.")
+    else:
+        notify("🎙 Risper listening", "Run risper-toggle again to stop.")
     play(config, "recording_start")
-    print(f"Risper {__version__}: recording {state['session_dir']}")
+    print(f"Risper {__version__}: recording {state['session_dir']} sources={','.join(sources)}")
     return 0
 
 

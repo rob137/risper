@@ -8,7 +8,7 @@ Risper deliberately leaves completed transcripts on the clipboard instead of try
 ## Commands
 
 - `risper`: enables autostart and starts the user daemon. `risper kill` stops it temporarily.
-- `risper-toggle`: start recording, stop recording on the next run, or cancel an active transcription.
+- `risper-toggle`: start recording, stop recording on the next run, or cancel an active transcription. `--system` also captures computer output, for recording a call with everyone's consent.
 - `risper-daemon`: marks incomplete sessions recovered on startup and stays alive for systemd.
 - `risper-open`: opens recordings, last session, last transcript, last audio, config, or copies the last transcript.
 - `risper-paste-test`: diagnostic helper for paste experiments with a real focused GTK text field.
@@ -145,6 +145,8 @@ Sessions are stored as:
     pw-record.log
 ```
 
+`--system` records each source to `audio.mic.wav` and `audio.system.wav`, then blends them into the single `audio.wav` that transcription reads. The per-source files are deleted once that succeeds and left behind if it does not.
+
 `events.jsonl` is the structured debugging trail. It records workflow boundaries such as recorder start/stop, transcription, clipboard copy, skipped paste, and recovery. It does not store full transcript text by default.
 
 Inspect the latest session without dumping transcript contents:
@@ -163,17 +165,22 @@ Bind this command in GNOME Settings, Keyboard, View and Customize Shortcuts, Cus
 risper-toggle
 ```
 
+Bind a second shortcut to `risper-toggle --system` for calls. Either shortcut stops a recording, because the sources are read back from the session state rather than the command line.
+
 Double Alt is implemented as an optional Linux input-event listener in `risper-daemon`, but it is disabled by default. It needs read access to `/dev/input/event*`; on GNOME Wayland that usually means explicit input-group or udev-rule setup. See `docs/double-alt.md`.
 
 When Double Alt is enabled, tapping it during transcription cancels the active transcription instead of starting a new recording.
 
 ## Current Environment Findings
 
-Dated snapshot, last verified 2026-07-06.
+Dated snapshot, last verified 2026-08-17.
 
 - Ubuntu 24.04.4 LTS, GNOME 46, Wayland.
-- `pw-record`, `wl-copy`, `wtype`, `ydotool`, `notify-send`, `gio`, GTK 3, and `canberra-gtk-play` are available.
-- `pactl`, `ffmpeg`, `xdotool`, `dotool`, AppIndicator, `pip`, `faster-whisper`, and Python `whisper` are not available.
+- `pw-record`, `pw-play`, `pw-link`, `pw-dump`, `wpctl`, `ffmpeg`, `wl-copy`, `wtype`, `ydotool`, `notify-send`, `gio`, GTK 3, and `canberra-gtk-play` are available.
+- `pactl`, `parec`, `sox`, `xdotool`, `dotool`, AppIndicator, `pip`, `faster-whisper`, and Python `whisper` are not available.
+- System audio is captured by giving `pw-record` the `stream.capture.sink=true` property. With no `--target` it follows the default sink's monitor, so it tracks output device changes the way mic capture tracks the default source. Passing `--target` alone is not enough; without the property `pw-record` silently records the default source instead.
+- Monitor capture is unity gain and reads before the output volume control, so turning the volume down does not quieten the recording.
+- Changing the output device mid-recording is handled by PipeWire: the capture relinks to the new default sink's monitor and keeps going, including when a mono monitor is replaced by a stereo one.
 - whisper.cpp with `ggml-small.en.bin` (default) and `ggml-base.en.bin` (fast fallback) is installed under `~/.local/share/risper/engines`.
 - Automatic paste on GNOME Wayland was tested and removed from the default workflow because helper success did not reliably mean text appeared in the intended target. The transcript is copied to the clipboard instead.
 - True tray/status-window UI is not part of the default workflow. Ubuntu notifications and the GNOME microphone indicator provide the lightweight feedback.

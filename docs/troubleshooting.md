@@ -8,7 +8,11 @@ Run:
 risper-diagnose
 ```
 
-Check whether `pw-record` is present. Session-specific recorder stderr is stored in `pw-record.log`.
+Check whether `pw-record` is present. Session-specific recorder stderr is stored in `pw-record.log`, and in `pw-record.system.log` for the `--system` source.
+
+## Nothing From The Other Side Of A Call
+
+`risper-diagnose last` reports `audio_sources`, and a source that captured nothing is listed in the session errors. Check that the far end was actually playing through the default sink at the time: `wpctl status` marks it with `*`, and `pw-link -l` shows what was linked to it. Output volume is not the cause, because monitor capture reads before the volume control.
 
 ## Transcription Failed
 

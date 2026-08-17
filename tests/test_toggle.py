@@ -83,7 +83,7 @@ class ToggleFinishTests(unittest.TestCase):
             patch("risper.toggle.notify") as notify,
             patch("risper.toggle.play") as play,
         ):
-            code = main()
+            code = main([])
 
         self.assertEqual(code, 0)
         cancel.assert_called_once_with(self.config, state)
@@ -102,10 +102,48 @@ class ToggleFinishTests(unittest.TestCase):
             patch("risper.toggle.play") as play,
             patch("sys.stdout", new=io.StringIO()),
         ):
-            code = main()
+            code = main([])
 
         self.assertEqual(code, 0)
         play.assert_called_once_with(self.config, "recording_start")
+
+    def _sources_for(self, argv: list[str]) -> tuple[str, ...]:
+        with (
+            patch("risper.toggle.current_transcription", return_value=None),
+            patch("risper.toggle.current_recording", return_value=None),
+            patch(
+                "risper.toggle.start_recording",
+                return_value={"session_dir": str(self.root / "session")},
+            ) as start,
+            patch("risper.toggle.notify"),
+            patch("risper.toggle.play"),
+            patch("sys.stdout", new=io.StringIO()),
+        ):
+            self.assertEqual(main(argv), 0)
+        return start.call_args.args[1]
+
+    def test_default_records_the_microphone_only(self) -> None:
+        self.assertEqual(self._sources_for([]), ("mic",))
+
+    def test_system_flag_adds_computer_output(self) -> None:
+        self.assertEqual(self._sources_for(["--system"]), ("mic", "system"))
+
+    def test_stopping_ignores_the_system_flag_and_uses_the_saved_state(self) -> None:
+        state = {"session_dir": str(self.root / "session"), "sources": ["mic", "system"]}
+
+        with (
+            patch("risper.toggle.current_transcription", return_value=None),
+            patch("risper.toggle.current_recording", return_value=state),
+            patch("risper.toggle.stop_recording", return_value={"status": "failed"}) as stop,
+            patch("risper.toggle._finish_session", return_value=0),
+            patch("risper.toggle.start_recording") as start,
+            patch("risper.toggle.notify"),
+            patch("risper.toggle.play"),
+        ):
+            main([])
+
+        stop.assert_called_once_with(self.config, state)
+        start.assert_not_called()
 
 
 if __name__ == "__main__":

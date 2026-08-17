@@ -47,6 +47,7 @@ def _print_session_diagnosis(session_id: str) -> int:
     print(f"ended_at             {metadata.get('ended_at')}")
     print(f"duration_seconds     {metadata.get('duration_seconds')}")
     print(f"session_type         {metadata.get('session_type')}")
+    print(f"audio_sources        {','.join(metadata.get('audio_sources') or ['mic'])}")
     print(f"engine               {metadata.get('transcription_engine')}")
     print(f"model                {metadata.get('model')}")
     print(f"language             {metadata.get('language')}")
@@ -68,6 +69,9 @@ def _print_session_diagnosis(session_id: str) -> int:
         ("status log", root / "status.log"),
         ("error log", root / "error.log"),
         ("recorder log", root / "pw-record.log"),
+        ("recorder log sys", root / "pw-record.system.log"),
+        ("unmixed mic", audio_path.with_suffix(".mic.wav")),
+        ("unmixed system", audio_path.with_suffix(".system.wav")),
         ("daemon log", config.log_path),
     ]:
         size = path.stat().st_size if path.exists() else 0

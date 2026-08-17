@@ -48,6 +48,21 @@ Expected:
 - Running `risper-toggle` during transcription cancels the active transcription.
 - No daemon-owned status window should appear during dictation.
 
+System audio, with something playing through the current output device:
+
+```bash
+PYTHONPATH=src python3 -m risper.toggle --system
+PYTHONPATH=src python3 -m risper.toggle
+```
+
+Expected:
+
+- Two recorder processes while recording: `pgrep -a pw-record` shows one with `stream.capture.sink=true`.
+- `pw-record.system.log` is present and `risper-diagnose last` reports `audio_sources mic,system`.
+- Only `audio.wav` survives; `audio.mic.wav` and `audio.system.wav` are gone once mixing succeeds.
+- The transcript contains both your own words and what was playing.
+- `events.jsonl` records `recorder.mixed` with the sources used.
+
 History:
 
 ```bash

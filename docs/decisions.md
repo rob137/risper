@@ -28,6 +28,17 @@
 - The selected profile moves from `whispercpp-base-en` to `whispercpp-small-en`, and both profiles pass `-t 8` (whisper-cli defaults to 4 threads, half the physical cores). Benchmarks on saved sessions showed small.en costs about 3x the wall time (~3.4s vs ~1s on a short clip) but fixed meaning-level transcription errors on real dictation. base.en stays registered as the fast fallback. Numbers in `docs/performance.md`.
 - A Vulkan build for the Radeon 780M iGPU was considered and parked: for short dictation clips the model-load and GPU-init overhead eats the compute saving, and it adds a platform-sensitive build to maintain.
 
+## 2026-08-17 System audio is a second recorder source
+
+- `risper-toggle --system` records the mic and the computer's own output at the same time, so a call can be transcribed with everyone's consent. The two captures are blended into the single `audio.wav` that transcription already reads, which leaves the session format, transcription contract, history, retranscribe, and retention untouched.
+- Speaker attribution was considered and rejected. Recording the two sides to separate files and labelling the transcript would roughly double transcription time; an LLM reading the finished text can infer who was speaking well enough for notes. The two sources are therefore mixed, not kept apart.
+- The mechanism is a `pw-record` property, `stream.capture.sink=true`, with no `--target` so it follows the default sink. Passing `--target` on its own does not work: `pw-record` silently records the default source instead, which reads as success because the mic picks up the speakers.
+- Mixing uses `ffmpeg` with `amix`, which is why the stale README line claiming `ffmpeg` was unavailable mattered. `normalize=1` is deliberate: dictation here already peaks at 0 dBFS, so summing two hot sides clipped about four times as many samples as normalising did, and whisper.cpp transcribed the quieter mix identically.
+- Following the default sink rather than pinning one was checked against a device change mid-recording: the capture relinked from the Bluetooth headset's mono monitor to the laptop speakers' stereo monitor and carried on, with no corruption from the channel count changing under a mono file header. No reconnect handling is needed.
+- Sources are all signalled before any is waited on. Stopping them one at a time let the later source keep recording for as long as the earlier one took to exit.
+- A source that captured nothing is dropped and noted in the session errors rather than failing the recording. A failed mix does fail the session and leaves both per-source files on disk to match the existing "failures leave recoverable files behind" rule.
+- Long-call ergonomics are knowingly left alone. Transcription still runs inline and still lands on the clipboard, so an hour of audio blocks the toggle for roughly eight minutes at small.en's 0.16x realtime. Ruled out as out of scope for this change; revisit if it becomes annoying in practice.
+
 ## 2026-08-06 Audio retention is enforced
 
 - Manual pruning finally hurt, so the deferral recorded on 2026-07-06 ends here. 1562 sessions had accumulated 1.82 GB of `audio.wav` since 6 May while their transcripts and metadata came to 5.6 MB, and the `retention` key was parsed into `Config` and then read by nothing. A setting that describes a policy nobody enforces is worse than no setting.
