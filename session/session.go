@@ -197,7 +197,7 @@ func LoadSession(path string) (*Metadata, error) {
 	var metadata Metadata
 	if err := json.Unmarshal(data, &metadata); err != nil {
 		// A damaged directory should not make history listing fail. It remains
-		// on disk for diagnosis, just as the Python reader leaves it alone.
+		// on disk for diagnosis, rather than silently discarding it.
 		return nil, nil
 	}
 	return &metadata, nil

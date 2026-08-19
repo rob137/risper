@@ -4,19 +4,19 @@
 
 - Project name, package, commands, config paths, and data paths use `risper`.
 - Recording uses `pw-record` because it is installed and fits the GNOME Wayland/PipeWire environment.
-- The first implementation did not download a transcription model or install Python packages. After the follow-up request to continue, whisper.cpp was installed user-locally and the `base.en` model was downloaded.
+- The first implementation did not download a transcription model or install runtime packages. After the follow-up request to continue, whisper.cpp was installed user-locally and the `base.en` model was downloaded.
 - Transcription is a local external command hook pointed at whisper.cpp. This keeps the core recoverable while leaving engine choice reversible.
 - Model selection is profile-based in `~/.config/risper/models.toml`. This is deliberately lighter than a settings UI and makes a future engine addable via a wrapper command.
-- Desktop integration is behind `platforms/`, and recording is behind `recorders.py`. Linux is implemented now; macOS/Windows have starter adapters so future portability work has a clear target.
+- Desktop integration is behind `desktop/`, and recording is behind `recording/`. Linux is implemented now; future portability work has a clear target.
 - Paste is fail-soft. On this Wayland setup, no `wtype`, `ydotool`, `dotool`, or X11 `xdotool` path exists, so clipboard fallback is expected.
 - The daemon is deliberately small. Its current useful job is startup recovery; the toggle command is independently usable for GNOME custom shortcuts.
-- AppIndicator tray work is deferred because the current Python environment lacks AppIndicator/Ayatana namespaces.
+- AppIndicator tray work is deferred because the current desktop environment lacks AppIndicator/Ayatana namespaces.
 - Double Alt is deferred because implementing it correctly on Wayland requires input-event access or a lower-level key remapper. That should be explicitly approved before setup.
 
 ## 2026-07-06 Audit pass
 
 - The rename to `risper` and the publish to `github.com/rob137/risper` both completed in May 2026; their one-shot task briefs (`docs/rename-to-risper.md`, `docs/publish.md`) are folded into this line and deleted.
-- The standalone status monitor/overlay chain (`monitor.py`, `overlay.py`, `audiolevel.py`, the `show_overlay` config knob) is removed. It was dead: nothing in `src/` imported it and the daemon explicitly ignored the knob. `status_window.py` (`risper-status`) is the one status UI. If a mic-level display comes back, resurrect from git history rather than keeping unreferenced code warm.
+- The standalone status monitor/overlay chain and its ignored config knob are removed. The status window was also removed during the Go cutover; `risper-status` is now the service-status alias. If a mic-level display comes back, resurrect it from git history rather than keeping unreferenced code warm.
 - Retention stays `retention = "never"`: recordings are still never deleted automatically. Runaway forgotten-toggle sessions (multi-hour WAVs whose transcription was cancelled) get pruned by hand; automatic audio expiry is deferred until manual pruning actually hurts.
 
 ## 2026-07-16 Remove Parakeet support
@@ -30,9 +30,8 @@
 
 ## 2026-08-17 System audio is a second recorder source
 
-This is the Python-era capture design. The Go Phase 2 design below supersedes
-its capture-time `--system` choice and its deletion of the source files; the
-Python compatibility path remains unchanged.
+This is the pre-Go capture design. The Go Phase 2 design below supersedes its
+capture-time `--system` choice and its deletion of the source files.
 
 - `risper-toggle --system` records the mic and the computer's own output at the same time, so a call can be transcribed with everyone's consent. The two captures are blended into the single `audio.wav` that transcription already reads, which leaves the session format, transcription contract, history, retranscribe, and retention untouched.
 - Speaker attribution was considered and rejected. Recording the two sides to separate files and labelling the transcript would roughly double transcription time; an LLM reading the finished text can infer who was speaking well enough for notes. The two sources are therefore mixed, not kept apart.
@@ -45,14 +44,14 @@ Python compatibility path remains unchanged.
 
 ## 2026-08-19 Go recording and transcription cycle
 
-- Phase 2 moves the record, mix, transcribe, clipboard, notification, sound, and toggle cycle into Go. The Python modules remain intact and runnable while the Go command is validated; the durable session and state formats are shared so either side leaves diagnosable data behind.
+- Phase 2 moves the record, mix, transcribe, clipboard, notification, sound, and toggle cycle into Go. The durable session and state formats are shared so the migration leaves diagnosable data behind.
 - Every Go recording starts both `pw-record` sources. The microphone goes to `audio.mic.wav`, the default sink monitor goes to `audio.system.wav`, and `ffmpeg` produces `audio.wav` with `amix=...:normalize=1`. All three files are retained. Keeping the tracks separate is what makes a later mixed transcription possible and makes `audio_retention = "7d"` account for the additional capture rather than silently discarding it.
 - `--system` no longer chooses what gets captured. It selects the mixed `audio.wav` for transcription; without it, the Go toggle transcribes `audio.mic.wav`. If the call shortcut is used to start recording, that mixed-transcription request is stored in the recording state so an ordinary shortcut can still stop it. This preserves the useful shortcut habit without making the capture decision at the first keypress.
 - The Go functional test puts stubs for `pw-record`, `ffmpeg`, `whisper-cli`, `wl-copy`, `notify-send`, and `canberra-gtk-play` on a temporary `PATH`, then runs two real toggle cycles. This tests process groups, file hand-off, source selection, clipboard input, and event boundaries without touching Rob's live audio devices or sessions.
 
 ## 2026-08-19 Go command surface
 
-- The remaining terminal command surface is available through one Go `risper` binary: service control, history, open, retranscribe, model profiles, diagnostics, and benchmarks. The existing Python entry points remain during the migration; the installation script only switches the top-level `risper` service command to Go.
+- The remaining terminal command surface is available through one Go `risper` binary: service control, history, open, retranscribe, model profiles, diagnostics, benchmarks, and clipboard verification. Compatibility launchers preserve the established command names.
 - Go retranscription chooses `audio.mic.wav` by default for sessions with per-source tracks and accepts `--mixed` or `--system` to recover a call from `audio.wav`. Older sessions without source paths continue to use `audio.wav`.
 - The Go path deliberately has no paste helper implementation. It normalizes legacy paste modes to `clipboard_only`, copies completed retranscriptions to the clipboard, and keeps the four historical paste metadata fields loadable and consistently false.
 
@@ -64,7 +63,13 @@ Python compatibility path remains unchanged.
 
 ## 2026-08-19 Go daemon and Linux hotkey listener
 
-- Phase 4 moves daemon startup recovery, hourly and startup audio-retention pruning, Double Alt input handling, and daemon logging into Go. The installed user service now runs `risper-daemon`; the Python daemon remains available until phase 5 removes it.
+- Phase 4 moves daemon startup recovery, hourly and startup audio-retention pruning, Double Alt input handling, and daemon logging into Go. The installed user service now runs `risper-daemon`.
+
+## 2026-08-19 Go cutover
+
+- Phase 5 removes the old source and test trees, packaging metadata, and mutation-runner wrapper. `go test ./...` is the test gate and `scripts/mutation-smoke.sh` remains the focused mutation check.
+- `install-user.sh` builds one Go binary, installs the ten established compatibility launchers, installs the service and desktop files, and restarts the daemon in the same command. Source edits therefore become live only after a build, install, and restart.
+- The standalone status window and automatic paste experiment are not part of the Go workflow. `risper-status` reports service status, while `risper-paste-test` copies a marker for manual clipboard verification.
 - Double Alt reads Linux `/dev/input/event*` devices with per-device detector state, kernel event timestamps, stale-state recovery, and device re-registration after read failure. It logs discarded tap attempts as well as successful triggers, so a dead stretch is diagnosable rather than silent. A trigger runs the ordinary Go toggle with no audio-source decision; mixed call recovery remains an explicit `risper retranscribe --mixed` operation.
 - The portability direction is deliberately reversed from the 2026-05-06 entry: this is a one-user Ubuntu tool, so macOS and Windows starter adapters and `docs/portability.md` are not ported in the Go rewrite. The Go `platforms/` package is only the narrow Linux input boundary. Session-type detection remains in session metadata, implemented directly from the Linux session environment rather than carried through those unused adapters.
 - Audio retention is now live in the daemon as well as the command surface. Rob's `audio_retention = "7d"` means the three Go capture files are pruned together while transcripts and metadata stay indefinitely.

@@ -2,6 +2,6 @@
 Type=Application
 Name=Risper History
 Comment=Open Risper controls and recent dictations
-Exec=__ROOT__/scripts/run-status-window.sh
+Exec=__ROOT__/scripts/run-history-terminal.sh
 Terminal=false
 Categories=Utility;Audio;

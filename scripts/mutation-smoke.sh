@@ -8,16 +8,14 @@ trap 'rm -rf "${WORK}"' EXIT
 cp -a "${ROOT}" "${WORK}/risper"
 cd "${WORK}/risper"
 
-export PYTHONPATH="${WORK}/risper/src:${PYTHONPATH:-}"
-
 echo "baseline: tests should pass"
-/usr/bin/python3 -m unittest discover -s tests
+go test ./...
 
 echo "mutation: breaking selected model preference"
-perl -0pi -e 's/if config\.selected_model in profiles:/if False and config.selected_model in profiles:/' src/risper/models.py
+perl -0pi -e 's/if profile, ok := profiles\[cfg\.SelectedModel\]; ok \{/if profile, ok := profiles[cfg.SelectedModel]; ok \&\& false {/' models/models.go
 
-if /usr/bin/python3 -m unittest discover -s tests >/tmp/risper-mutation.log 2>&1; then
-  cat /tmp/risper-mutation.log
+if go test ./... >"${WORK}/mutation.log" 2>&1; then
+  cat "${WORK}/mutation.log"
   echo "mutation survived: tests did not catch selected-model breakage" >&2
   exit 1
 fi

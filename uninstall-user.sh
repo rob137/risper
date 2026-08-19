@@ -2,18 +2,10 @@
 set -euo pipefail
 
 systemctl --user disable --now risper.service 2>/dev/null || true
-rm -f "${HOME}/.local/bin/risper"
-rm -f "${HOME}/.local/bin/risper-toggle"
-rm -f "${HOME}/.local/bin/risper-daemon"
-rm -f "${HOME}/.local/bin/risper-open"
-rm -f "${HOME}/.local/bin/risper-paste-test"
-rm -f "${HOME}/.local/bin/risper-history"
-rm -f "${HOME}/.local/bin/risper-monitor"
-rm -f "${HOME}/.local/bin/risper-retranscribe"
-rm -f "${HOME}/.local/bin/risper-models"
-rm -f "${HOME}/.local/bin/risper-status"
-rm -f "${HOME}/.local/bin/risper-benchmark"
-rm -f "${HOME}/.local/bin/risper-diagnose"
+for command in risper risper-toggle risper-daemon risper-open risper-paste-test risper-history risper-retranscribe risper-models risper-status risper-benchmark risper-diagnose; do
+	rm -f "${HOME}/.local/bin/${command}"
+done
+rm -f "${HOME}/.local/bin/risper-monitor" "${HOME}/.local/bin/risper-toggle-"*
 rm -f "${HOME}/.config/systemd/user/risper.service"
 rm -f "${HOME}/.local/share/applications/risper.desktop"
 systemctl --user daemon-reload || true

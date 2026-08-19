@@ -49,8 +49,8 @@ func CopyText(text string) (bool, string) {
 }
 
 // OpenPath asks the desktop to open a file or directory with its default
-// handler. It is intentionally asynchronous, matching the Python command
-// surface and keeping a missing GUI application from blocking the CLI.
+// handler. It is intentionally asynchronous, keeping a missing GUI
+// application from blocking the CLI.
 func OpenPath(path string) (bool, string) {
 	if _, err := os.Stat(path); err != nil {
 		if os.IsNotExist(err) {
@@ -89,7 +89,7 @@ func DiagnosticCommands() []string {
 	return []string{
 		"pw-record", "arecord", "ffmpeg", "wl-copy", "wtype", "xclip", "xsel",
 		"xdotool", "ydotool", "dotool", "notify-send", "paplay",
-		"canberra-gtk-play", "gio", "gtk-launch", "python3", "go",
+		"canberra-gtk-play", "gio", "gtk-launch", "go",
 	}
 }
 

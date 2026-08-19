@@ -6,10 +6,12 @@ import (
 
 	"github.com/rob137/risper/benchmark"
 	"github.com/rob137/risper/cli"
+	"github.com/rob137/risper/daemon"
 	"github.com/rob137/risper/diagnose"
 	"github.com/rob137/risper/history"
 	"github.com/rob137/risper/models"
 	"github.com/rob137/risper/open"
+	"github.com/rob137/risper/pastecheck"
 	"github.com/rob137/risper/retranscribe"
 	"github.com/rob137/risper/toggle"
 )
@@ -31,6 +33,8 @@ func Main(args []string) int {
 		return cli.Main(args)
 	case "toggle":
 		return toggle.Main(args[1:])
+	case "daemon":
+		return daemon.Main()
 	case "history":
 		return history.Main(args[1:])
 	case "open":
@@ -43,6 +47,8 @@ func Main(args []string) int {
 		return benchmark.Main(args[1:])
 	case "diagnose":
 		return diagnose.Main(args[1:])
+	case "paste-test":
+		return pastecheck.Main(args[1:])
 	default:
 		fmt.Fprintf(os.Stderr, "risper: unknown command %q\n", args[0])
 		printUsageTo(os.Stderr)
@@ -57,6 +63,7 @@ func printUsageTo(output *os.File) {
 	fmt.Fprintln(output)
 	fmt.Fprintln(output, "Service: start (default), kill, stop, restart, status")
 	fmt.Fprintln(output, "Dictation: toggle")
+	fmt.Fprintln(output, "Daemon: daemon")
 	fmt.Fprintln(output, "Sessions: history, open, retranscribe")
-	fmt.Fprintln(output, "Models and diagnostics: models, benchmark, diagnose")
+	fmt.Fprintln(output, "Models and diagnostics: models, benchmark, diagnose, paste-test")
 }

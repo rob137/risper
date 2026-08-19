@@ -12,7 +12,7 @@ Check whether `pw-record` is present. Session-specific recorder stderr is stored
 
 ## Nothing From The Other Side Of A Call
 
-`risper-diagnose last` reports `audio_sources`, and a source that captured nothing is listed in the session errors. Check that the far end was actually playing through the default sink at the time: `wpctl status` marks it with `*`, and `pw-link -l` shows what was linked to it. Output volume is not the cause, because monitor capture reads before the volume control.
+`risper diagnose last` reports `audio_sources`, and a source that captured nothing is listed in the session errors. Check that the far end was actually playing through the default sink at the time: `wpctl status` marks it with `*`, and `pw-link -l` shows what was linked to it. Output volume is not the cause, because monitor capture reads before the volume control.
 
 ## Transcription Failed
 
@@ -40,13 +40,15 @@ risper diagnose last
 
 The per-session `events.jsonl` file records clipboard copy and the skipped-paste decision.
 
-Older sessions may contain `paste_attempted`. That means a helper such as `ydotool` exited successfully, but target-app insertion was not verified. The transcript remained on the clipboard.
+Older sessions may contain `paste_attempted`. Those fields are retained for compatibility; current sessions record that automatic paste was not attempted and leave the transcript on the clipboard.
 
-The old paste verification harness is still available for experiments:
+Check clipboard access with a marker:
 
 ```bash
 risper-paste-test
 ```
+
+Paste the printed marker into the target text field yourself. This command does not inject text into another application.
 
 ## Status Feedback
 

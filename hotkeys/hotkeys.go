@@ -28,10 +28,6 @@ type Detector struct {
 	devices    map[string]*deviceState
 }
 
-type DoubleAltDetector = Detector
-
-func NewDoubleAltDetector(window time.Duration) *Detector { return NewDetector(window) }
-
 func NewDetector(window time.Duration) *Detector {
 	if window <= 0 {
 		window = 350 * time.Millisecond

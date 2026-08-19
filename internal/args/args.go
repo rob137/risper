@@ -1,5 +1,5 @@
 // Package args contains the small bit of argument normalization needed by
-// Go's standard flag package. Python's argparse accepts options after a
+// Go's standard flag package accepts options after a
 // positional argument; the Go commands keep that useful CLI shape.
 package args
 

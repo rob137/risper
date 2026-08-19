@@ -1,5 +1,4 @@
-// Package cli implements the service-management command that was historically
-// exposed as the top-level Python `risper` entry point.
+// Package cli implements Risper's service-management commands.
 package cli
 
 import (
