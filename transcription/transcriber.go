@@ -68,7 +68,10 @@ func Transcribe(profile models.Profile, audioPath, rawPath, cleanPath string, on
 	return "", ErrNoTranscript{}
 }
 
-func renderCommand(profile models.Profile, audioPath, rawPath, cleanPath string) string {
+// RenderCommand expands the profile placeholders for commands that need to
+// run the same backend without writing a session transcript, such as the
+// benchmark command.
+func RenderCommand(profile models.Profile, audioPath, rawPath, cleanPath string) string {
 	replacements := map[string]string{
 		"{audio}":        audioPath,
 		"{raw}":          rawPath,
@@ -89,6 +92,10 @@ func renderCommand(profile models.Profile, audioPath, rawPath, cleanPath string)
 		}
 	}
 	return rendered
+}
+
+func renderCommand(profile models.Profile, audioPath, rawPath, cleanPath string) string {
+	return RenderCommand(profile, audioPath, rawPath, cleanPath)
 }
 
 func readTranscript(path string) (string, bool) {

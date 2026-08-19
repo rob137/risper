@@ -55,7 +55,7 @@ Backend contract:
 Add a profile:
 
 ```bash
-risper-models add-external my-local-engine \
+risper models add-external my-local-engine \
   --engine my-engine \
   --model my-model-name \
   --language en \

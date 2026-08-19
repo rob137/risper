@@ -5,7 +5,7 @@
 Run:
 
 ```bash
-risper-diagnose
+risper diagnose
 ```
 
 Check whether `pw-record` is present. Session-specific recorder stderr is stored in `pw-record.log`, and in `pw-record.system.log` for the `--system` source.
@@ -25,7 +25,7 @@ This is expected until `transcription_command` is configured in:
 The recording is still saved. Open the last session with:
 
 ```bash
-risper-open last-session
+risper open last-session
 ```
 
 ## Clipboard And Paste
@@ -35,7 +35,7 @@ On GNOME Wayland, apps generally cannot inject text globally without a helper. R
 Inspect the latest session:
 
 ```bash
-risper-diagnose last
+risper diagnose last
 ```
 
 The per-session `events.jsonl` file records clipboard copy and the skipped-paste decision.

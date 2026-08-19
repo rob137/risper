@@ -30,7 +30,7 @@ make_go_command() {
 	chmod +x "${BIN_DIR}/${command}"
 }
 
-make_wrapper risper risper.cli
+make_go_command risper cmd/risper
 make_wrapper risper-toggle-python risper.toggle
 make_go_command risper-toggle cmd/risper-toggle
 make_wrapper risper-daemon risper.daemon

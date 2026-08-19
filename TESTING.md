@@ -14,7 +14,7 @@ Run unit tests:
 go test ./...
 ```
 
-`go test ./...` includes the Phase 2 functional cycle. It places temporary
+`go test ./...` includes the Phase 2 functional cycle and Phase 3 command tests. It places temporary
 stubs for `pw-record`, `ffmpeg`, `whisper-cli`, `wl-copy`, `notify-send`, and
 `canberra-gtk-play` on `PATH`, then runs the Go toggle through recording,
 mixing, mic-only transcription, mixed transcription, clipboard copy, and
@@ -66,28 +66,28 @@ PYTHONPATH=src python3 -m risper.toggle
 Expected:
 
 - Two recorder processes while recording: `pgrep -a pw-record` shows one with `stream.capture.sink=true`.
-- `pw-record.system.log` is present and `risper-diagnose last` reports `audio_sources mic,system`.
-- Only `audio.wav` survives; `audio.mic.wav` and `audio.system.wav` are gone once mixing succeeds.
+- `pw-record.system.log` is present and `risper diagnose last` reports `audio_sources mic,system`.
+- `audio.wav`, `audio.mic.wav`, and `audio.system.wav` remain available until `audio_retention` prunes them.
 - The transcript contains both your own words and what was playing.
 - `events.jsonl` records `recorder.mixed` with the sources used.
 
 History:
 
 ```bash
-PYTHONPATH=src python3 -m risper.history
-PYTHONPATH=src python3 -m risper.open recordings
-PYTHONPATH=src python3 -m risper.open last-session
-PYTHONPATH=src python3 -m risper.retranscribe last
-PYTHONPATH=src python3 -m risper.model_cli list
+go run ./cmd/risper history
+go run ./cmd/risper open recordings
+go run ./cmd/risper open last-session
+go run ./cmd/risper retranscribe last
+go run ./cmd/risper models list
 PYTHONPATH=src python3 -m risper.status_window
 PYTHONPATH=src python3 -m risper.paste_test
-PYTHONPATH=src python3 -m risper.benchmark last --profile whispercpp-small-en
+go run ./cmd/risper benchmark last --profile whispercpp-small-en
 ```
 
 Inspect the latest diagnostic trail:
 
 ```bash
-PYTHONPATH=src python3 -m risper.diagnose last
+go run ./cmd/risper diagnose last
 ```
 
 Daemon recovery smoke test:

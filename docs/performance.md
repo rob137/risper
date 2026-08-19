@@ -5,7 +5,7 @@ Measurements on Ubuntu 24.04, AMD Ryzen 7 250 (8 cores / 16 threads), 46 GiB RAM
 Command:
 
 ```bash
-risper-benchmark <session-id> \
+risper benchmark <session-id> \
   --profile whispercpp-base-en --profile whispercpp-small-en \
   --repeat 2
 ```

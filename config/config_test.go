@@ -101,6 +101,28 @@ func TestLoadNormalizesCompatibilityValues(t *testing.T) {
 	}
 }
 
+func TestLoadTreatsLegacyPasteModesAsClipboardOnly(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("XDG_CONFIG_HOME", filepath.Join(home, "config"))
+	t.Setenv("XDG_DATA_HOME", filepath.Join(home, "data"))
+	t.Setenv("XDG_STATE_HOME", filepath.Join(home, "state"))
+	path, err := EnsureDefaultConfig()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, []byte("paste_mode = \"auto\"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	loaded, err := Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if loaded.PasteMode != "clipboard_only" {
+		t.Fatalf("paste mode = %q", loaded.PasteMode)
+	}
+}
+
 func TestUpdateConfigValuePreservesCommentsAndQuotes(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)

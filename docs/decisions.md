@@ -50,6 +50,12 @@ Python compatibility path remains unchanged.
 - `--system` no longer chooses what gets captured. It selects the mixed `audio.wav` for transcription; without it, the Go toggle transcribes `audio.mic.wav`. If the call shortcut is used to start recording, that mixed-transcription request is stored in the recording state so an ordinary shortcut can still stop it. This preserves the useful shortcut habit without making the capture decision at the first keypress.
 - The Go functional test puts stubs for `pw-record`, `ffmpeg`, `whisper-cli`, `wl-copy`, `notify-send`, and `canberra-gtk-play` on a temporary `PATH`, then runs two real toggle cycles. This tests process groups, file hand-off, source selection, clipboard input, and event boundaries without touching Rob's live audio devices or sessions.
 
+## 2026-08-19 Go command surface
+
+- The remaining terminal command surface is available through one Go `risper` binary: service control, history, open, retranscribe, model profiles, diagnostics, and benchmarks. The existing Python entry points remain during the migration; the installation script only switches the top-level `risper` service command to Go.
+- Go retranscription chooses `audio.mic.wav` by default for sessions with per-source tracks and accepts `--mixed` or `--system` to recover a call from `audio.wav`. Older sessions without source paths continue to use `audio.wav`.
+- The Go path deliberately has no paste helper implementation. It normalizes legacy paste modes to `clipboard_only`, copies completed retranscriptions to the clipboard, and keeps the four historical paste metadata fields loadable and consistently false.
+
 ## 2026-08-06 Audio retention is enforced
 
 - Manual pruning finally hurt, so the deferral recorded on 2026-07-06 ends here. 1562 sessions had accumulated 1.82 GB of `audio.wav` since 6 May while their transcripts and metadata came to 5.6 MB, and the `retention` key was parsed into `Config` and then read by nothing. A setting that describes a policy nobody enforces is worse than no setting.

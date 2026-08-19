@@ -2,22 +2,22 @@
 
 Risper is a local-first Ubuntu dictation utility. It is built around durable session folders: recording creates the folder and metadata before audio capture starts, and failures leave recoverable files behind.
 
-Current state: phase 2 of the Go rewrite, with a small daemon and CLI history. The Go toggle owns recording, mixing, local transcription via selectable model profiles, notifications, sounds, and clipboard copy. The Python implementation remains available during the migration.
+Current state: phase 3 of the Go rewrite. The Go binary owns the command surface for service control, history, opening sessions, retranscription, model profiles, diagnostics, and benchmarking. The Go toggle owns recording, mixing, local transcription via selectable model profiles, notifications, sounds, and clipboard copy. The Python implementation remains available during the migration.
 Risper deliberately leaves completed transcripts on the clipboard instead of trying to inject text into the focused app. On GNOME Wayland that path was not reliable enough to keep in the default workflow.
 
 ## Commands
 
-- `risper`: enables autostart and starts the user daemon. `risper kill` stops it temporarily.
+- `risper`: enables autostart and starts the user daemon. `risper kill` stops it temporarily. The same binary provides the subcommands below.
+- `risper toggle`: the Go recording/transcription cycle. `risper-toggle` remains the shortcut-compatible Go entry point.
 - `risper-toggle`: start recording, stop recording on the next run, or cancel an active transcription. Both mic and computer output are captured into separate tracks; `--system` asks transcription to use their mixed audio.
-- `risper-daemon`: marks incomplete sessions recovered on startup and stays alive for systemd.
-- `risper-open`: opens recordings, last session, last transcript, last audio, config, or copies the last transcript.
-- `risper-paste-test`: diagnostic helper for paste experiments with a real focused GTK text field.
-- `risper-history`: prints recent sessions and can open, play, copy, retranscribe, or delete a session by id, and `--prune-audio` applies `audio_retention` on demand.
-- `risper-retranscribe`: retranscribes a saved session by id, or the last session by default.
-- `risper-models`: lists, selects, and adds local transcription model profiles.
-- `risper-status`: opens the GTK control/history window.
-- `risper-benchmark`: measures transcription profile wall time, CPU use, and peak RSS.
-- `risper-diagnose`: prints OS checks, or `risper-diagnose last` for a compact session diagnostic.
+- `risper history`: prints recent sessions and can open, play, copy, retranscribe, or delete a session by id, and `--prune-audio` applies `audio_retention` on demand.
+- `risper open`: opens recordings, last session, last transcript, last audio, config, or copies the last transcript.
+- `risper retranscribe`: retranscribes a saved session by id, or the last session by default. It uses the mic track by default; `--mixed` (or `--system`) selects the mixed mic-and-system audio.
+- `risper models`: lists, selects, and adds local transcription model profiles.
+- `risper benchmark`: measures transcription profile wall time, CPU use, and peak RSS.
+- `risper diagnose`: prints OS checks, or `risper diagnose last` for a compact session diagnostic.
+- `risper-daemon`: the existing Python startup-recovery daemon remains in place during the migration.
+- `risper-status` and `risper-paste-test` remain Python-only and are intentionally not part of the Go port.
 
 ## Install
 
@@ -51,7 +51,7 @@ For proper mutation testing options, see `docs/mutation-testing.md`.
 Performance measurements:
 
 ```bash
-risper-benchmark last --profile whispercpp-small-en
+risper benchmark last --profile whispercpp-small-en
 ```
 
 See `docs/performance.md`.
@@ -104,14 +104,14 @@ If the command writes `{raw}` or `{clean}` itself, Risper preserves those files.
 List/select profiles:
 
 ```bash
-risper-models list
-risper-models select whispercpp-small-en
+risper models list
+risper models select whispercpp-small-en
 ```
 
 Add another local backend profile:
 
 ```bash
-risper-models add-external my-engine \
+risper models add-external my-engine \
   --engine some-engine \
   --model some-local-model \
   --language en \
@@ -154,7 +154,7 @@ Every Go recording captures each source to `audio.mic.wav` and `audio.system.wav
 Inspect the latest session without dumping transcript contents:
 
 ```bash
-risper-diagnose last
+risper diagnose last
 ```
 
 Recordings are never deleted automatically.

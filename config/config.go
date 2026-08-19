@@ -22,16 +22,14 @@ transcription_engine = "external"
 transcription_command = ""
 model = "base.en"
 language = "en"
-paste_mode = "clipboard_only" # clipboard_only | auto | xdotool | wtype | ydotool | dotool
+paste_mode = "clipboard_only" # the transcript is always left on the clipboard
 play_sounds = true
 double_alt_enabled = false
 double_alt_window_ms = 350
 audio_retention = "never" # never | <count>h | <count>d | <count>w; transcripts are always kept
 `
 
-var allowedPasteModes = map[string]struct{}{
-	"auto": {}, "clipboard_only": {}, "xdotool": {}, "wtype": {}, "ydotool": {}, "dotool": {},
-}
+var allowedPasteModes = map[string]struct{}{"clipboard_only": {}}
 
 type Config struct {
 	ConfigPath               string

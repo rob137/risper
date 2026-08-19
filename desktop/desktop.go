@@ -48,6 +48,51 @@ func CopyText(text string) (bool, string) {
 	return false, "no clipboard command available"
 }
 
+// OpenPath asks the desktop to open a file or directory with its default
+// handler. It is intentionally asynchronous, matching the Python command
+// surface and keeping a missing GUI application from blocking the CLI.
+func OpenPath(path string) (bool, string) {
+	if _, err := os.Stat(path); err != nil {
+		if os.IsNotExist(err) {
+			return false, "not found: " + path
+		}
+		return false, err.Error()
+	}
+	if !config.CommandExists("gio") {
+		return false, "gio is not installed"
+	}
+	if err := exec.Command("gio", "open", path).Start(); err != nil {
+		return false, "could not open " + path + ": " + err.Error()
+	}
+	return true, "opened " + path
+}
+
+// TrashPath uses the desktop trash where available. Callers may choose a
+// more explicit fallback only after asking the user for confirmation.
+func TrashPath(path string) (bool, string) {
+	if _, err := os.Stat(path); err != nil {
+		if os.IsNotExist(err) {
+			return false, "not found: " + path
+		}
+		return false, err.Error()
+	}
+	if !config.CommandExists("gio") {
+		return false, "gio is not installed"
+	}
+	if err := exec.Command("gio", "trash", path).Run(); err != nil {
+		return false, "could not move to trash: " + err.Error()
+	}
+	return true, "moved to trash: " + path
+}
+
+func DiagnosticCommands() []string {
+	return []string{
+		"pw-record", "arecord", "ffmpeg", "wl-copy", "wtype", "xclip", "xsel",
+		"xdotool", "ydotool", "dotool", "notify-send", "paplay",
+		"canberra-gtk-play", "gio", "gtk-launch", "python3", "go",
+	}
+}
+
 func Notify(cfg config.Config, title, body string) {
 	if title == "" || !config.CommandExists("notify-send") {
 		return
