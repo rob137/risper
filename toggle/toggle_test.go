@@ -38,8 +38,17 @@ printf 'RIFFmixed-audio-padding-012345678901234567890123456789012345678901234567
 printf '%s\n' "$*" >> "$FFMPEG_LOG"
 `,
 		"whisper-cli": `#!/bin/sh
-printf '%s\n' "$*" >> "$WHISPER_LOG"
-printf 'phase two transcript\n'
+output=
+while [ "$#" -gt 0 ]; do
+  printf '<%s>\n' "$1" >> "$WHISPER_LOG"
+  if [ "$1" = "-of" ]; then
+    shift
+    output="$1"
+    printf '<%s>\n' "$1" >> "$WHISPER_LOG"
+  fi
+  shift
+done
+printf 'phase two transcript\n' > "${output}.txt"
 `,
 		"wl-copy": `#!/bin/sh
 cat > "$CLIPBOARD_PATH"
@@ -94,7 +103,8 @@ audio_retention = "7d"
 engine = "whisper.cpp"
 model = "stub"
 language = "en"
-command = "whisper-cli -f {audio}"
+command = "whisper-cli -f {audio} --prompt \"{prompt}\" -nt -otxt -of {raw_no_txt}"
+prompt = "Names and terms: Abdullah, coEngen, Singular Machines, Culham, Adrian, James, Will, Flic, Claude, Claude Code, Codex, ChatGPT, Emacs, Temporal, divertor. Plainer, shorter."
 `
 	if err := os.WriteFile(filepath.Join(configHome, "risper", "models.toml"), []byte(models), 0o644); err != nil {
 		t.Fatal(err)
@@ -117,8 +127,18 @@ command = "whisper-cli -f {audio}"
 	if first.Status != "complete" {
 		t.Fatalf("first status = %q, errors=%v", first.Status, first.Errors)
 	}
-	if got := readFile(t, filepath.Join(root, "whisper.log")); !strings.Contains(got, ".mic.wav") {
-		t.Fatalf("default transcription did not use mic track: %q", got)
+	whisperLog := readFile(t, filepath.Join(root, "whisper.log"))
+	if !strings.Contains(whisperLog, ".mic.wav") {
+		t.Fatalf("default transcription did not use mic track: %q", whisperLog)
+	}
+	if !strings.Contains(whisperLog, "<Names and terms: Abdullah, coEngen, Singular Machines, Culham, Adrian, James, Will, Flic, Claude, Claude Code, Codex, ChatGPT, Emacs, Temporal, divertor. Plainer, shorter.>") {
+		t.Fatalf("prompt was not preserved as one argument: %q", whisperLog)
+	}
+	if got := strings.TrimSpace(readFile(t, first.TranscriptRawPath)); got != "phase two transcript" {
+		t.Fatalf("raw transcript = %q", got)
+	}
+	if got := strings.TrimSpace(readFile(t, first.TranscriptCleanPath)); got != "phase two transcript" {
+		t.Fatalf("clean transcript = %q", got)
 	}
 	assertAudioFiles(t, first)
 
@@ -128,20 +148,35 @@ command = "whisper-cli -f {audio}"
 	if code := Main(nil); code != 0 {
 		t.Fatalf("mixed stop returned %d", code)
 	}
-	second, err := session.Last(cfg)
-	if err != nil || second == nil {
-		t.Fatalf("second session = %#v, %v", second, err)
+	allSessions, err := session.All(cfg)
+	if err != nil || len(allSessions) != 2 {
+		t.Fatalf("sessions = %#v, %v", allSessions, err)
+	}
+	var second *session.Metadata
+	for _, candidate := range allSessions {
+		if candidate.SessionID != first.SessionID {
+			second = candidate
+			break
+		}
+	}
+	if second == nil {
+		t.Fatalf("could not identify second session among %#v", allSessions)
 	}
 	if second.Status != "complete" {
 		t.Fatalf("second status = %q, errors=%v", second.Status, second.Errors)
 	}
-	whisperLog := readFile(t, filepath.Join(root, "whisper.log"))
-	lines := strings.Split(strings.TrimSpace(whisperLog), "\n")
-	if len(lines) != 2 || !strings.Contains(lines[1], "audio.wav") || strings.Contains(lines[1], ".mic.wav") {
+	whisperLog = readFile(t, filepath.Join(root, "whisper.log"))
+	if strings.Count(whisperLog, ".mic.wav") != 1 || !strings.Contains(whisperLog, second.AudioPath) || strings.Contains(whisperLog, second.AudioSourcePaths["mic"]) {
 		t.Fatalf("mixed transcription paths = %q", whisperLog)
 	}
 	if got := strings.TrimSpace(readFile(t, clipboard)); got != "phase two transcript" {
 		t.Fatalf("clipboard = %q", got)
+	}
+	if got := strings.TrimSpace(readFile(t, second.TranscriptRawPath)); got != "phase two transcript" {
+		t.Fatalf("mixed raw transcript = %q", got)
+	}
+	if got := strings.TrimSpace(readFile(t, second.TranscriptCleanPath)); got != "phase two transcript" {
+		t.Fatalf("mixed clean transcript = %q", got)
 	}
 	if got := readFile(t, filepath.Join(root, "ffmpeg.log")); !strings.Contains(got, "normalize=1") {
 		t.Fatalf("ffmpeg was not asked for a normalised mix: %q", got)
