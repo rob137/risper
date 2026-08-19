@@ -162,6 +162,7 @@ func finishSession(cfg config.Config, metadata *session.Metadata, useMixed bool)
 	})
 	falseValue := false
 	metadata.Status = "complete"
+	metadata.Errors = []string{}
 	metadata.PasteAttempted = &falseValue
 	metadata.PasteHelperSucceeded = &falseValue
 	metadata.PasteSucceeded = &falseValue

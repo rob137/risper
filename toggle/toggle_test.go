@@ -117,6 +117,14 @@ prompt = "Names and terms: Abdullah, coEngen, Singular Machines, Culham, Adrian,
 	if code := Main(nil); code != 0 {
 		t.Fatalf("start returned %d", code)
 	}
+	stale, err := session.Last(cfg)
+	if err != nil || stale == nil {
+		t.Fatalf("current session = %#v, %v", stale, err)
+	}
+	stale.Errors = []string{"stale error from an earlier attempt"}
+	if err := session.SaveMetadata(stale); err != nil {
+		t.Fatal(err)
+	}
 	if code := Main(nil); code != 0 {
 		t.Fatalf("default stop returned %d", code)
 	}
@@ -126,6 +134,9 @@ prompt = "Names and terms: Abdullah, coEngen, Singular Machines, Culham, Adrian,
 	}
 	if first.Status != "complete" {
 		t.Fatalf("first status = %q, errors=%v", first.Status, first.Errors)
+	}
+	if len(first.Errors) != 0 {
+		t.Fatalf("successful transcription retained stale errors: %#v", first.Errors)
 	}
 	whisperLog := readFile(t, filepath.Join(root, "whisper.log"))
 	if !strings.Contains(whisperLog, ".mic.wav") {

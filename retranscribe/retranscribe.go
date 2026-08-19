@@ -128,6 +128,7 @@ func run(cfg config.Config, metadata *session.Metadata, profile models.Profile, 
 	})
 	falseValue := false
 	metadata.Status = "complete"
+	metadata.Errors = []string{}
 	metadata.PasteAttempted = &falseValue
 	metadata.PasteHelperSucceeded = &falseValue
 	metadata.PasteSucceeded = &falseValue

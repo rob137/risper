@@ -46,6 +46,10 @@ cat > "$CLIPBOARD_PATH"
 	}
 
 	first := makeSession(t, cfg, "first")
+	first.Errors = []string{"stale error from an earlier attempt"}
+	if err := session.SaveMetadata(first); err != nil {
+		t.Fatal(err)
+	}
 	if code := Main([]string{first.SessionID}); code != 0 {
 		t.Fatalf("mic retranscribe returned %d", code)
 	}
@@ -74,6 +78,9 @@ cat > "$CLIPBOARD_PATH"
 		}
 		if loaded.Status != "complete" || loaded.PasteAttempted == nil || *loaded.PasteAttempted {
 			t.Fatalf("metadata = %#v", loaded)
+		}
+		if len(loaded.Errors) != 0 {
+			t.Fatalf("successful retranscription retained stale errors: %#v", loaded.Errors)
 		}
 	}
 }
