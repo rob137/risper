@@ -59,7 +59,9 @@ Performance measurements:
 risper benchmark last --profile whispercpp-small-en
 ```
 
-See `docs/performance.md` and `docs/mutation-testing.md`.
+See `docs/performance.md` for benchmark context. The focused mutation smoke is
+kept as `./scripts/mutation-smoke.sh`; it does not require a general mutation
+runner.
 
 ## Configure
 
@@ -148,7 +150,7 @@ Sessions are stored as:
     pw-record.log
 ```
 
-Every Go recording captures microphone and computer output separately, then blends them into `audio.wav`. Default transcription reads `audio.mic.wav`; `--system` reads the mixed track. Audio remains until `audio_retention` prunes it.
+Every Go recording captures microphone and computer output separately, then blends them into `audio.wav`. Default transcription reads `audio.mic.wav`; `--system` selects the mixed track for transcription. Both source tracks are captured regardless of that flag. Audio remains until `audio_retention` prunes it.
 
 `events.jsonl` is the structured debugging trail. It records workflow boundaries without storing full transcript text by default. Transcripts and metadata are retained indefinitely.
 

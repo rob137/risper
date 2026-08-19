@@ -36,14 +36,14 @@ Expected:
 - `transcript.raw.txt` and `transcript.clean.txt` are created.
 - `events.jsonl` records recorder, transcription, clipboard, and skipped-paste boundaries without transcript text.
 - Audio remains available if transcription fails.
-- Start/stop notifications and sounds are attempted.
+- Recording-start, transcription-start, success/error notifications and sounds are attempted; stopping moves directly into transcription rather than showing a separate stop notification.
 - A transcription-start notification appears after stopping recording.
 - Running `risper-toggle` during transcription cancels it.
 - No daemon-owned status window appears during dictation.
 
 ## System audio
 
-With something playing through the current output device:
+With something playing through the current output device, use `--system` to select the mixed mic-and-system track for transcription:
 
 ```bash
 risper-toggle --system
@@ -71,7 +71,7 @@ risper diagnose last
 risper-paste-test
 ```
 
-The `risper-*` commands in `~/.local/bin` are compatibility wrappers over the matching Go subcommands. `risper-paste-test` copies a marker to the clipboard for a manual check; automatic paste is not part of normal dictation.
+The `risper-*` commands in `~/.local/bin` are compatibility wrappers over the matching Go subcommands. `risper-status` reports `risper.service` status; it does not open a GTK status window. `risper-paste-test` copies a marker to the clipboard for a manual check; it does not run the old paste experiment, and automatic paste is not part of normal dictation.
 
 ## Daemon recovery smoke test
 
@@ -83,7 +83,7 @@ pkill -INT pw-record
 risper-daemon
 ```
 
-The daemon should mark any still-`recording` sessions as `recovered`.
+The daemon should mark any still-`recording` sessions as `recovered`; stop the foreground daemon with Ctrl-C when the check is complete.
 
 Still environment-limited:
 
