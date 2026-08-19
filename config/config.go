@@ -3,6 +3,7 @@ package config
 import (
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -88,6 +89,11 @@ func StateHome() string  { return xdgDir("XDG_STATE_HOME", filepath.Join(".local
 
 func ConfigPath() string { return filepath.Join(ConfigHome(), AppName, "config.toml") }
 func ModelsPath() string { return filepath.Join(ConfigHome(), AppName, "models.toml") }
+
+func CommandExists(name string) bool {
+	_, err := exec.LookPath(name)
+	return err == nil
+}
 
 func EnsureDefaultConfig() (string, error) {
 	path := ConfigPath()

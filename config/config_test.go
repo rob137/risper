@@ -29,6 +29,21 @@ func TestParseAudioRetention(t *testing.T) {
 	}
 }
 
+func TestCommandExistsUsesPath(t *testing.T) {
+	dir := t.TempDir()
+	command := filepath.Join(dir, "available")
+	if err := os.WriteFile(command, []byte("#!/bin/sh\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", dir)
+	if !CommandExists("available") {
+		t.Fatal("expected executable on PATH to be found")
+	}
+	if CommandExists("missing") {
+		t.Fatal("did not expect missing executable to be found")
+	}
+}
+
 func TestLoadUsesDefaultsAndCreatesDirectories(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
@@ -78,7 +93,7 @@ func TestLoadNormalizesCompatibilityValues(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if loaded.SessionsDir != customSessions || loaded.PasteMode != "clipboard_only" || loaded.DoubleAltWindowMS != 100 {
+	if loaded.SessionsDir != customSessions || loaded.PasteMode != "clipboard_only" || !loaded.PlaySounds || loaded.DoubleAltWindowMS != 100 {
 		t.Fatalf("unexpected normalized config: %+v", loaded)
 	}
 	if loaded.AudioRetentionSeconds == nil || *loaded.AudioRetentionSeconds != 7*86400 {

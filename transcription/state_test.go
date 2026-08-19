@@ -1,30 +1,35 @@
 package transcription
 
 import (
-	"encoding/json"
 	"os"
 	"path/filepath"
 	"testing"
 
 	"github.com/rob137/risper/config"
+	"github.com/rob137/risper/events"
+	"github.com/rob137/risper/internal/files"
 	"github.com/rob137/risper/session"
 )
 
 func testConfig(t *testing.T) config.Config {
 	t.Helper()
 	root := t.TempDir()
-	t.Setenv("HOME", root)
-	t.Setenv("XDG_CONFIG_HOME", filepath.Join(root, "config"))
-	t.Setenv("XDG_DATA_HOME", filepath.Join(root, "data"))
-	t.Setenv("XDG_STATE_HOME", filepath.Join(root, "state"))
-	cfg, err := config.Load()
-	if err != nil {
-		t.Fatal(err)
+	return config.Config{
+		ConfigPath:               filepath.Join(root, "config.toml"),
+		ModelsPath:               filepath.Join(root, "models.toml"),
+		SessionsDir:              filepath.Join(root, "sessions"),
+		StateDir:                 filepath.Join(root, "state"),
+		CurrentTranscriptionPath: filepath.Join(root, "state", "current-transcription.json"),
+		LogPath:                  filepath.Join(root, "state", "risper.log"),
+		TranscriptionEngine:      "external",
+		Model:                    "base.en",
+		Language:                 "en",
+		PasteMode:                "clipboard_only",
+		SelectedModel:            "default",
 	}
-	return cfg
 }
 
-func TestStartSetWorkerAndFinish(t *testing.T) {
+func TestStartCurrentSetWorkerAndFinish(t *testing.T) {
 	cfg := testConfig(t)
 	metadata, err := session.Create(cfg)
 	if err != nil {
@@ -34,25 +39,48 @@ func TestStartSetWorkerAndFinish(t *testing.T) {
 		t.Fatal(err)
 	}
 	state, err := Current(cfg)
-	if err != nil || state == nil || state.Profile != "test-profile" || state.WorkerPID != nil {
-		t.Fatalf("current state = %#v, %v", state, err)
+	if err != nil || state == nil || state.Profile != "test-profile" || state.ControllerPID != os.Getpid() || state.WorkerPID != nil {
+		t.Fatalf("unexpected current state: %+v, %v", state, err)
 	}
 	if err := SetWorkerPID(cfg, os.Getpid()); err != nil {
 		t.Fatal(err)
 	}
 	state, err = Current(cfg)
 	if err != nil || state == nil || state.WorkerPID == nil || *state.WorkerPID != os.Getpid() {
-		t.Fatalf("worker state = %#v, %v", state, err)
+		t.Fatalf("worker PID was not persisted: %+v, %v", state, err)
 	}
 	if err := Finish(cfg); err != nil {
 		t.Fatal(err)
 	}
 	if state, err := Current(cfg); err != nil || state != nil {
-		t.Fatalf("finished state = %#v, %v", state, err)
+		t.Fatalf("state remained after Finish: %+v, %v", state, err)
+	}
+	if err := Finish(cfg); err != nil {
+		t.Fatalf("Finish should be idempotent: %v", err)
 	}
 }
 
-func TestCancelMarksSessionAndClearsState(t *testing.T) {
+func TestCurrentRemovesMalformedOrStaleState(t *testing.T) {
+	cfg := testConfig(t)
+	if err := os.MkdirAll(filepath.Dir(cfg.CurrentTranscriptionPath), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(cfg.CurrentTranscriptionPath, []byte("not json"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if state, err := Current(cfg); err != nil || state != nil {
+		t.Fatalf("malformed state = %+v, %v", state, err)
+	}
+	stalePID := os.Getpid() + 1000000
+	if err := files.AtomicWriteJSON(cfg.CurrentTranscriptionPath, State{ControllerPID: stalePID}); err != nil {
+		t.Fatal(err)
+	}
+	if state, err := Current(cfg); err != nil || state != nil {
+		t.Fatalf("stale state = %+v, %v", state, err)
+	}
+}
+
+func TestCancelUsesPersistedMetadataPathAndClearsState(t *testing.T) {
 	cfg := testConfig(t)
 	metadata, err := session.Create(cfg)
 	if err != nil {
@@ -62,49 +90,25 @@ func TestCancelMarksSessionAndClearsState(t *testing.T) {
 		t.Fatal(err)
 	}
 	state, err := Current(cfg)
-	if err != nil {
+	if err != nil || state == nil {
+		t.Fatalf("missing state before cancel: %+v, %v", state, err)
+	}
+	state.SessionDir = ""
+	if err := Cancel(cfg, state); err != nil {
 		t.Fatal(err)
 	}
-	cancelled, err := Cancel(cfg, state)
-	if err != nil || !cancelled {
-		t.Fatalf("cancel = %v, %v", cancelled, err)
-	}
-	persisted, err := session.LoadSession(session.SessionDir(metadata))
-	if err != nil || persisted.Status != "cancelled" || len(persisted.Errors) != 1 {
-		t.Fatalf("cancelled metadata = %#v, %v", persisted, err)
+	loaded, err := session.LoadSession(session.SessionDir(metadata))
+	if err != nil || loaded == nil || loaded.Status != "cancelled" || len(loaded.Errors) != 1 {
+		t.Fatalf("unexpected cancelled session: %+v, %v", loaded, err)
 	}
 	if _, err := os.Stat(cfg.CurrentTranscriptionPath); !os.IsNotExist(err) {
-		t.Fatalf("state file still exists: %v", err)
+		t.Fatalf("state file remains or unexpected stat error: %v", err)
 	}
-	data, _ := os.ReadFile(filepath.Join(session.SessionDir(metadata), "events.jsonl"))
-	if len(data) == 0 {
-		t.Fatal("missing cancellation event")
+	records, err := events.Read(session.SessionDir(metadata), 0)
+	if err != nil || records[len(records)-1]["event"] != "transcription.cancel_requested" {
+		t.Fatalf("missing cancellation event: %#v, %v", records, err)
 	}
-	var last map[string]any
-	for _, line := range splitJSONLines(data) {
-		if err := json.Unmarshal(line, &last); err != nil {
-			t.Fatal(err)
-		}
+	if _, err := os.Stat(cfg.LogPath); err != nil {
+		t.Fatalf("missing application log: %v", err)
 	}
-	if last["event"] != "transcription.cancel_requested" {
-		t.Fatalf("last event = %#v", last)
-	}
-}
-
-func splitJSONLines(data []byte) [][]byte {
-	var lines [][]byte
-	for len(data) > 0 {
-		index := 0
-		for index < len(data) && data[index] != '\n' {
-			index++
-		}
-		if index > 0 {
-			lines = append(lines, data[:index])
-		}
-		if index == len(data) {
-			break
-		}
-		data = data[index+1:]
-	}
-	return lines
 }
