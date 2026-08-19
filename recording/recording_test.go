@@ -3,6 +3,7 @@ package recording
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/rob137/risper/config"
@@ -46,5 +47,56 @@ func TestMarkStartFailedPersistsRecoverableSession(t *testing.T) {
 	}
 	if len(records) == 0 || records[len(records)-1]["event"] != "recorder.start_failed" {
 		t.Fatalf("events = %#v", records)
+	}
+}
+
+func TestStartRejectsRecorderThatExitsDuringStartup(t *testing.T) {
+	root := t.TempDir()
+	bin := filepath.Join(root, "bin")
+	if err := os.Mkdir(bin, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	recorder := `#!/bin/sh
+set -eu
+output=
+for arg in "$@"; do output="$arg"; done
+case "$*" in
+  *stream.capture.sink=true*)
+    printf 'RIFF system audio padding' > "$output"
+    trap 'exit 0' INT TERM
+    while :; do sleep 0.01; done
+    ;;
+  *)
+    exit 17
+    ;;
+esac
+`
+	if err := os.WriteFile(filepath.Join(bin, "pw-record"), []byte(recorder), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", bin+string(os.PathListSeparator)+"/usr/bin")
+	cfg := config.Config{
+		SessionsDir:         filepath.Join(root, "sessions"),
+		StateDir:            filepath.Join(root, "state"),
+		CurrentStatePath:    filepath.Join(root, "state", "current.json"),
+		Language:            "en",
+		Model:               "base.en",
+		PasteMode:           "clipboard_only",
+		TranscriptionEngine: "external",
+	}
+
+	state, err := Start(cfg, false)
+	if err == nil || state != nil || !strings.Contains(err.Error(), "pw-record mic exited during startup") {
+		t.Fatalf("Start() = state %v, err %v", state, err)
+	}
+	metadata, err := session.Last(cfg)
+	if err != nil || metadata == nil {
+		t.Fatalf("last session = %#v, %v", metadata, err)
+	}
+	if metadata.Status != "failed" || len(metadata.Errors) != 2 {
+		t.Fatalf("metadata = %#v", metadata)
+	}
+	if current, currentErr := Current(cfg); currentErr != nil || current != nil {
+		t.Fatalf("current state = %#v, %v", current, currentErr)
 	}
 }

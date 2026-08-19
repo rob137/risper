@@ -28,6 +28,8 @@ const (
 
 const wavHeaderBytes = 44
 
+const recorderStartupGrace = 100 * time.Millisecond
+
 // State is the cross-process marker for the two recorders belonging to one
 // session. TranscriptionSource is a request, not a capture choice: both
 // sources are always recorded.
@@ -120,6 +122,7 @@ func Start(cfg config.Config, requestMixed bool) (*State, error) {
 	}
 
 	pids := make(map[string]int, 2)
+	waits := make(map[string]<-chan error, 2)
 	for _, source := range []Source{Mic, System} {
 		cmd := recorderCommand(source, partPaths[string(source)])
 		logPath := filepath.Join(sessionDir, recorderLogName(source))
@@ -147,7 +150,23 @@ func Start(cfg config.Config, requestMixed bool) (*State, error) {
 		// The state file is the cross-process handle used by the next toggle,
 		// but this process still owns the child while it remains alive. Reap it
 		// asynchronously so a clean SIGINT does not look like a live zombie.
-		go func() { _ = cmd.Wait() }()
+		waited := make(chan error, 1)
+		waits[string(source)] = waited
+		go func() { waited <- cmd.Wait() }()
+	}
+	for _, source := range []Source{Mic, System} {
+		timer := time.NewTimer(recorderStartupGrace)
+		select {
+		case err := <-waits[string(source)]:
+			if !timer.Stop() {
+				<-timer.C
+			}
+			reason := fmt.Sprintf("pw-record %s exited during startup: %v", source, err)
+			stopPIDs(pids)
+			markStartFailedReason(metadata, pids, reason)
+			return nil, errors.New(reason)
+		case <-timer.C:
+		}
 	}
 
 	transcriptionSource := Mic
@@ -198,13 +217,24 @@ func recorderLogName(source Source) string {
 }
 
 func markStartFailed(metadata *session.Metadata, pids map[string]int) {
+	markStartFailedReason(metadata, pids, "")
+}
+
+func markStartFailedReason(metadata *session.Metadata, pids map[string]int, reason string) {
 	metadata.Status = "failed"
 	metadata.Errors = append(metadata.Errors, "could not start all audio recorders")
+	if reason != "" {
+		metadata.Errors = append(metadata.Errors, reason)
+	}
 	_ = session.SaveMetadata(metadata)
-	_, _ = events.Append(session.SessionDir(metadata), "recorder.start_failed", map[string]any{
+	details := map[string]any{
 		"sources": []string{string(Mic), string(System)},
 		"started": pids,
-	})
+	}
+	if reason != "" {
+		details["error"] = reason
+	}
+	_, _ = events.Append(session.SessionDir(metadata), "recorder.start_failed", details)
 }
 
 func appendLog(path, message string) error {
