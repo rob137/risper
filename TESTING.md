@@ -12,6 +12,30 @@ go test ./...
 
 The mutation smoke copies the repository, deliberately breaks selected-model resolution, and expects the Go tests to fail.
 
+## Real audio end-to-end check
+
+This is deliberately separate from `go test ./...`: it records through the
+default PipeWire sink, plays audio through the speakers, mixes real captures
+with `ffmpeg`, and runs the installed whisper.cpp model. Expect audible
+speech from the speakers before running it.
+
+The test keeps its Risper config, model registry, state, clipboard helper, and
+session output under a temporary directory. It only reads the input WAV from
+the live session store. By default it finds a completed live session whose
+transcript contains `looking` and `list`; set these variables to use another
+known-good recording or whisper.cpp installation:
+
+```bash
+RISPER_E2E_AUDIO="$HOME/.local/share/risper/sessions/2026-08-19_11-24-32/audio.wav" \
+RISPER_E2E_EXPECTED_WORDS="looking,list" \
+RISPER_E2E_WHISPER_CLI="$HOME/.local/share/risper/engines/whisper.cpp/build/bin/whisper-cli" \
+RISPER_E2E_MODEL="$HOME/.local/share/risper/engines/whisper.cpp/models/ggml-small.en.bin" \
+go test -tags real_e2e ./toggle -run '^TestRealSystemAudioCycle$' -count=1 -v
+```
+
+The test tag is intentional: real recording and transcription take materially
+longer than the normal unit-test loop.
+
 ## Manual microphone check
 
 Use the installed command surface for this check:
