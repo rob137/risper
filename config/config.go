@@ -1,6 +1,7 @@
 package config
 
 import (
+	"flag"
 	"fmt"
 	"os"
 	"os/exec"
@@ -14,9 +15,11 @@ import (
 
 const AppName = "risper"
 
+const defaultSessionsDir = "~/.local/share/risper/sessions"
+
 const DefaultConfig = `# Risper user config.
 # Paths support ~ expansion.
-sessions_dir = "~/.local/share/risper/sessions"
+sessions_dir = "` + defaultSessionsDir + `"
 selected_model = "default"
 transcription_engine = "external"
 transcription_command = ""
@@ -69,9 +72,28 @@ type rawConfig struct {
 func homeDir() string {
 	home, err := os.UserHomeDir()
 	if err != nil {
-		return "."
+		return ""
 	}
 	return home
+}
+
+func requireTestIsolation() error {
+	// A test process must not silently inherit any of Rob's XDG roots. The
+	// individual package tests set all three explicitly; rejecting a missing
+	// root makes a newly added test fail before it can create live data.
+	if flag.Lookup("test.v") == nil {
+		return nil
+	}
+	missing := make([]string, 0, 3)
+	for _, name := range []string{"XDG_CONFIG_HOME", "XDG_DATA_HOME", "XDG_STATE_HOME"} {
+		if os.Getenv(name) == "" {
+			missing = append(missing, name)
+		}
+	}
+	if len(missing) > 0 {
+		return fmt.Errorf("test isolation is incomplete; set %s before loading Risper config", strings.Join(missing, ", "))
+	}
+	return nil
 }
 
 func xdgDir(environment, fallback string) string {
@@ -127,22 +149,31 @@ func ParseAudioRetention(value string) (float64, bool) {
 }
 
 func expandHome(path string) string {
+	home := homeDir()
+	if strings.HasPrefix(path, "~") && home == "" {
+		return ""
+	}
 	if path == "~" {
-		return homeDir()
+		return home
 	}
 	if strings.HasPrefix(path, "~/") {
-		return filepath.Join(homeDir(), path[2:])
+		return filepath.Join(home, path[2:])
 	}
 	return path
 }
 
 func Load() (Config, error) {
+	if err := requireTestIsolation(); err != nil {
+		return Config{}, err
+	}
 	path, err := EnsureDefaultConfig()
 	if err != nil {
 		return Config{}, err
 	}
+	dataHome := DataHome()
+	stateHome := StateHome()
 	raw := rawConfig{
-		SessionsDir:         filepath.Join(DataHome(), AppName, "sessions"),
+		SessionsDir:         filepath.Join(dataHome, AppName, "sessions"),
 		SelectedModel:       "default",
 		TranscriptionEngine: "external",
 		Model:               "base.en",
@@ -170,9 +201,17 @@ func Load() (Config, error) {
 	}
 	retention, hasRetention := ParseAudioRetention(raw.AudioRetention)
 
-	dataDir := filepath.Join(DataHome(), AppName)
-	stateDir := filepath.Join(StateHome(), AppName)
-	sessionsDir := expandHome(raw.SessionsDir)
+	dataDir := filepath.Join(dataHome, AppName)
+	stateDir := filepath.Join(stateHome, AppName)
+	sessionsDir := raw.SessionsDir
+	if sessionsDir == "" || sessionsDir == defaultSessionsDir {
+		sessionsDir = filepath.Join(dataHome, AppName, "sessions")
+	} else {
+		sessionsDir = expandHome(sessionsDir)
+		if sessionsDir == "" && strings.HasPrefix(raw.SessionsDir, "~") {
+			return Config{}, fmt.Errorf("cannot expand sessions_dir: HOME is not set")
+		}
+	}
 	for _, dir := range []string{dataDir, stateDir, sessionsDir} {
 		if err := os.MkdirAll(dir, 0o755); err != nil {
 			return Config{}, err

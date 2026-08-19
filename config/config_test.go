@@ -75,6 +75,34 @@ func TestLoadUsesDefaultsAndCreatesDirectories(t *testing.T) {
 	}
 }
 
+func TestLoadUsesIsolatedXDGDataForDefaultSessions(t *testing.T) {
+	root := t.TempDir()
+	t.Setenv("HOME", "")
+	t.Setenv("XDG_CONFIG_HOME", filepath.Join(root, "config"))
+	t.Setenv("XDG_DATA_HOME", filepath.Join(root, "data"))
+	t.Setenv("XDG_STATE_HOME", filepath.Join(root, "state"))
+
+	loaded, err := Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := filepath.Join(root, "data", AppName, "sessions")
+	if loaded.SessionsDir != want {
+		t.Fatalf("sessions dir = %q, want isolated XDG path %q", loaded.SessionsDir, want)
+	}
+}
+
+func TestLoadRefusesMissingTestIsolation(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("XDG_CONFIG_HOME", "")
+	t.Setenv("XDG_DATA_HOME", "")
+	t.Setenv("XDG_STATE_HOME", "")
+
+	if _, err := Load(); err == nil || !strings.Contains(err.Error(), "test isolation is incomplete") {
+		t.Fatalf("Load() error = %v, want an isolation error", err)
+	}
+}
+
 func TestLoadNormalizesCompatibilityValues(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
