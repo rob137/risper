@@ -16,6 +16,7 @@ import (
 	"github.com/rob137/risper/config"
 	"github.com/rob137/risper/desktop"
 	"github.com/rob137/risper/platforms"
+	"github.com/rob137/risper/recording"
 	"github.com/rob137/risper/session"
 )
 
@@ -81,6 +82,9 @@ func Run(ctx context.Context, cfg config.Config) error {
 // used by the command surface.
 func RunWithOptions(ctx context.Context, cfg config.Config, rawOptions Options) error {
 	options := rawOptions.withDefaults()
+	if _, err := recording.Current(cfg); err != nil {
+		return fmt.Errorf("clear stale recording state: %w", err)
+	}
 	recovered, err := session.MarkIncompleteRecordingsRecovered(cfg)
 	if err != nil {
 		return fmt.Errorf("recover incomplete recordings: %w", err)

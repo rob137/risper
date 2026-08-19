@@ -69,6 +69,13 @@ func TestRunRecoversSessionsAndPrunesAudioAtStartup(t *testing.T) {
 	if err := session.SaveMetadata(old); err != nil {
 		t.Fatal(err)
 	}
+	stateData, err := json.Marshal(map[string]any{"recorder_pids": map[string]int{}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(cfg.CurrentStatePath, stateData, 0o644); err != nil {
+		t.Fatal(err)
+	}
 	oldTime := now.Add(-3 * time.Hour)
 	for _, path := range []string{old.AudioPath, old.AudioSourcePaths["mic"]} {
 		if err := os.Chtimes(path, oldTime, oldTime); err != nil {
@@ -92,6 +99,9 @@ func TestRunRecoversSessionsAndPrunesAudioAtStartup(t *testing.T) {
 	}
 	if _, err := os.Stat(old.AudioPath); !os.IsNotExist(err) {
 		t.Fatalf("old audio still exists: %v", err)
+	}
+	if _, err := os.Stat(cfg.CurrentStatePath); !os.IsNotExist(err) {
+		t.Fatalf("stale recording state still exists: %v", err)
 	}
 	var event map[string]any
 	data, err := os.ReadFile(filepath.Join(session.SessionDir(old), session.EventsFile))
