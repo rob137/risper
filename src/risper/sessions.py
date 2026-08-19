@@ -147,19 +147,32 @@ def prune_expired_audio(config: Config) -> int:
     cutoff = time.time() - config.audio_retention_seconds
     pruned = 0
     for metadata in all_sessions(config):
-        audio = Path(str(metadata["audio_path"]))
-        try:
-            expired = audio.stat().st_mtime < cutoff
-        except OSError:
+        audio_paths = [Path(str(metadata["audio_path"]))]
+        audio_paths.extend(
+            Path(str(path))
+            for path in (metadata.get("audio_source_paths") or {}).values()
+        )
+        existing_paths = []
+        expired = False
+        for audio in audio_paths:
+            try:
+                if audio.exists():
+                    existing_paths.append(audio)
+                    expired = expired or audio.stat().st_mtime < cutoff
+            except OSError:
+                continue
+        if not existing_paths:
             continue
         if not expired:
             continue
-        audio.unlink()
+        for audio in existing_paths:
+            audio.unlink()
         update_metadata(metadata, audio_pruned_at=utc_now_iso())
         append_event(
             metadata,
             "audio.pruned",
-            audio_path=str(audio),
+            audio_path=str(audio_paths[0]),
+            audio_paths=[str(path) for path in existing_paths],
             retention_seconds=config.audio_retention_seconds,
         )
         pruned += 1

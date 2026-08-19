@@ -118,9 +118,27 @@ func TestPruneAndRecover(t *testing.T) {
 	if err := os.WriteFile(old.AudioPath, []byte("RIFF"), 0o644); err != nil {
 		t.Fatal(err)
 	}
+	old.AudioSourcePaths = map[string]string{
+		"mic":    filepath.Join(SessionDir(old), "audio.mic.wav"),
+		"system": filepath.Join(SessionDir(old), "audio.system.wav"),
+	}
+	if err := os.WriteFile(old.AudioSourcePaths["mic"], []byte("mic"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(old.AudioSourcePaths["system"], []byte("system"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := SaveMetadata(old); err != nil {
+		t.Fatal(err)
+	}
 	now := time.Date(2026, 8, 19, 10, 0, 0, 0, time.UTC)
 	if err := os.Chtimes(old.AudioPath, now.Add(-2*time.Hour), now.Add(-2*time.Hour)); err != nil {
 		t.Fatal(err)
+	}
+	for _, path := range old.AudioSourcePaths {
+		if err := os.Chtimes(path, now.Add(-2*time.Hour), now.Add(-2*time.Hour)); err != nil {
+			t.Fatal(err)
+		}
 	}
 	count, err := PruneExpiredAudioAt(cfg, now)
 	if err != nil || count != 1 {
@@ -128,6 +146,11 @@ func TestPruneAndRecover(t *testing.T) {
 	}
 	if _, err := os.Stat(old.AudioPath); !os.IsNotExist(err) {
 		t.Fatalf("audio was not pruned: %v", err)
+	}
+	for source, path := range old.AudioSourcePaths {
+		if _, err := os.Stat(path); !os.IsNotExist(err) {
+			t.Fatalf("%s source was not pruned: %v", source, err)
+		}
 	}
 	pruned, err := LoadSession(SessionDir(old))
 	if err != nil || pruned == nil || pruned.AudioPrunedAt == nil {

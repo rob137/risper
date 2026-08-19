@@ -30,6 +30,7 @@ const (
 type Metadata struct {
 	AudioPath            string                     `json:"audio_path"`
 	AudioSources         []string                   `json:"audio_sources,omitempty"`
+	AudioSourcePaths     map[string]string          `json:"audio_source_paths,omitempty"`
 	AudioPrunedAt        *string                    `json:"audio_pruned_at,omitempty"`
 	DurationSeconds      *float64                   `json:"duration_seconds"`
 	EndedAt              *string                    `json:"ended_at"`
@@ -54,7 +55,7 @@ type Metadata struct {
 func boolPtr(value bool) *bool { return &value }
 
 var knownMetadataKeys = map[string]struct{}{
-	"audio_path": {}, "audio_sources": {}, "audio_pruned_at": {}, "duration_seconds": {}, "ended_at": {},
+	"audio_path": {}, "audio_sources": {}, "audio_source_paths": {}, "audio_pruned_at": {}, "duration_seconds": {}, "ended_at": {},
 	"errors": {}, "language": {}, "model": {}, "paste_attempted": {}, "paste_confirmation": {},
 	"paste_helper_succeeded": {}, "paste_succeeded": {}, "session_id": {}, "session_type": {},
 	"started_at": {}, "status": {}, "target_app": {}, "transcript_clean_path": {}, "transcript_raw_path": {},
@@ -134,6 +135,7 @@ func CreateAt(cfg config.Config, now time.Time) (*Metadata, error) {
 	started := nowISO(now)
 	metadata := &Metadata{
 		AudioPath:            filepath.Join(dir, AudioFile),
+		AudioSourcePaths:     map[string]string{},
 		Errors:               []string{},
 		Language:             cfg.Language,
 		Model:                cfg.Model,
@@ -270,18 +272,31 @@ func PruneExpiredAudioAt(cfg config.Config, now time.Time) (int, error) {
 	cutoff := now.Add(-time.Duration(*cfg.AudioRetentionSeconds * float64(time.Second)))
 	pruned := 0
 	for _, metadata := range sessions {
-		info, err := os.Stat(metadata.AudioPath)
-		if os.IsNotExist(err) {
+		paths := []string{metadata.AudioPath}
+		for _, path := range metadata.AudioSourcePaths {
+			paths = append(paths, path)
+		}
+		expired := false
+		for _, path := range paths {
+			info, err := os.Stat(path)
+			if os.IsNotExist(err) {
+				continue
+			}
+			if err != nil {
+				return pruned, err
+			}
+			if info.ModTime().Before(cutoff) {
+				expired = true
+				break
+			}
+		}
+		if !expired {
 			continue
 		}
-		if err != nil {
-			return pruned, err
-		}
-		if !info.ModTime().Before(cutoff) {
-			continue
-		}
-		if err := os.Remove(metadata.AudioPath); err != nil {
-			return pruned, err
+		for _, path := range paths {
+			if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
+				return pruned, err
+			}
 		}
 		prunedAt := nowISO(now)
 		metadata.AudioPrunedAt = &prunedAt

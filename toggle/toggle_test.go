@@ -1,0 +1,202 @@
+package toggle
+
+import (
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+
+	"github.com/rob137/risper/config"
+	"github.com/rob137/risper/events"
+	"github.com/rob137/risper/session"
+)
+
+func TestToggleRunsRealRecordMixTranscribeClipboardCycle(t *testing.T) {
+	root := t.TempDir()
+	bin := filepath.Join(root, "bin")
+	if err := os.Mkdir(bin, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	for name, body := range map[string]string{
+		"pw-record": `#!/bin/sh
+source=mic
+for arg in "$@"; do
+  case "$arg" in *stream.capture.sink=true*) source=system;; esac
+done
+output=
+for arg in "$@"; do output="$arg"; done
+printf 'RIFF%s' "$source" > "$output"
+printf 'audio-padding-01234567890123456789012345678901234567890123456789' >> "$output"
+printf '%s %s\n' "$source" "$*" >> "$PW_RECORD_LOG"
+trap 'exit 0' INT TERM
+while :; do sleep 0.05; done
+`,
+		"ffmpeg": `#!/bin/sh
+output=
+for arg in "$@"; do output="$arg"; done
+printf 'RIFFmixed-audio-padding-01234567890123456789012345678901234567890123456789' > "$output"
+printf '%s\n' "$*" >> "$FFMPEG_LOG"
+`,
+		"whisper-cli": `#!/bin/sh
+printf '%s\n' "$*" >> "$WHISPER_LOG"
+printf 'phase two transcript\n'
+`,
+		"wl-copy": `#!/bin/sh
+cat > "$CLIPBOARD_PATH"
+`,
+		"notify-send": `#!/bin/sh
+printf '%s\n' "$*" >> "$NOTIFY_LOG"
+printf '42\n'
+`,
+		"canberra-gtk-play": `#!/bin/sh
+printf '%s\n' "$*" >> "$SOUND_LOG"
+`,
+	} {
+		writeExecutable(t, filepath.Join(bin, name), body)
+	}
+
+	configHome := filepath.Join(root, "config")
+	dataHome := filepath.Join(root, "data")
+	stateHome := filepath.Join(root, "state")
+	sessions := filepath.Join(dataHome, "risper", "sessions")
+	clipboard := filepath.Join(root, "clipboard.txt")
+	for key, value := range map[string]string{
+		"XDG_CONFIG_HOME":  configHome,
+		"XDG_DATA_HOME":    dataHome,
+		"XDG_STATE_HOME":   stateHome,
+		"XDG_SESSION_TYPE": "wayland",
+		"PW_RECORD_LOG":    filepath.Join(root, "pw-record.log"),
+		"FFMPEG_LOG":       filepath.Join(root, "ffmpeg.log"),
+		"WHISPER_LOG":      filepath.Join(root, "whisper.log"),
+		"CLIPBOARD_PATH":   clipboard,
+		"NOTIFY_LOG":       filepath.Join(root, "notify.log"),
+		"SOUND_LOG":        filepath.Join(root, "sound.log"),
+	} {
+		t.Setenv(key, value)
+	}
+	t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
+	if err := os.MkdirAll(filepath.Join(configHome, "risper"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	configText := `sessions_dir = "` + sessions + `"
+selected_model = "stub"
+transcription_engine = "external"
+model = "stub"
+language = "en"
+paste_mode = "clipboard_only"
+play_sounds = true
+audio_retention = "7d"
+`
+	if err := os.WriteFile(filepath.Join(configHome, "risper", "config.toml"), []byte(configText), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	models := `[models.stub]
+engine = "whisper.cpp"
+model = "stub"
+language = "en"
+command = "whisper-cli -f {audio}"
+`
+	if err := os.WriteFile(filepath.Join(configHome, "risper", "models.toml"), []byte(models), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := config.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if code := Main(nil); code != 0 {
+		t.Fatalf("start returned %d", code)
+	}
+	if code := Main(nil); code != 0 {
+		t.Fatalf("default stop returned %d", code)
+	}
+	first, err := session.Last(cfg)
+	if err != nil || first == nil {
+		t.Fatalf("first session = %#v, %v", first, err)
+	}
+	if first.Status != "complete" {
+		t.Fatalf("first status = %q, errors=%v", first.Status, first.Errors)
+	}
+	if got := readFile(t, filepath.Join(root, "whisper.log")); !strings.Contains(got, ".mic.wav") {
+		t.Fatalf("default transcription did not use mic track: %q", got)
+	}
+	assertAudioFiles(t, first)
+
+	if code := Main([]string{"--system"}); code != 0 {
+		t.Fatalf("mixed start returned %d", code)
+	}
+	if code := Main(nil); code != 0 {
+		t.Fatalf("mixed stop returned %d", code)
+	}
+	second, err := session.Last(cfg)
+	if err != nil || second == nil {
+		t.Fatalf("second session = %#v, %v", second, err)
+	}
+	if second.Status != "complete" {
+		t.Fatalf("second status = %q, errors=%v", second.Status, second.Errors)
+	}
+	whisperLog := readFile(t, filepath.Join(root, "whisper.log"))
+	lines := strings.Split(strings.TrimSpace(whisperLog), "\n")
+	if len(lines) != 2 || !strings.Contains(lines[1], "audio.wav") || strings.Contains(lines[1], ".mic.wav") {
+		t.Fatalf("mixed transcription paths = %q", whisperLog)
+	}
+	if got := strings.TrimSpace(readFile(t, clipboard)); got != "phase two transcript" {
+		t.Fatalf("clipboard = %q", got)
+	}
+	if got := readFile(t, filepath.Join(root, "ffmpeg.log")); !strings.Contains(got, "normalize=1") {
+		t.Fatalf("ffmpeg was not asked for a normalised mix: %q", got)
+	}
+	if got := readFile(t, filepath.Join(root, "pw-record.log")); !strings.Contains(got, "stream.capture.sink=true") {
+		t.Fatalf("system recorder did not request sink capture: %q", got)
+	}
+
+	for _, metadata := range []*session.Metadata{first, second} {
+		records, readErr := events.Read(session.SessionDir(metadata), 0)
+		if readErr != nil {
+			t.Fatal(readErr)
+		}
+		seen := map[string]bool{}
+		for _, record := range records {
+			if event, ok := record["event"].(string); ok {
+				seen[event] = true
+			}
+		}
+		for _, required := range []string{"recorder.mixed", "transcription.completed", "clipboard.copy", "paste.skipped"} {
+			if !seen[required] {
+				t.Fatalf("session %s missing event %s: %#v", metadata.SessionID, required, records)
+			}
+		}
+	}
+}
+
+func writeExecutable(t *testing.T, path, body string) {
+	t.Helper()
+	if err := os.WriteFile(path, []byte(body), 0o755); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func readFile(t *testing.T, path string) string {
+	t.Helper()
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(data)
+}
+
+func assertAudioFiles(t *testing.T, metadata *session.Metadata) {
+	t.Helper()
+	if len(metadata.AudioSourcePaths) != 2 {
+		t.Fatalf("audio source paths = %#v", metadata.AudioSourcePaths)
+	}
+	for source, path := range metadata.AudioSourcePaths {
+		info, err := os.Stat(path)
+		if err != nil || info.Size() <= 44 {
+			t.Fatalf("%s source path %s: %v", source, path, err)
+		}
+	}
+	if info, err := os.Stat(metadata.AudioPath); err != nil || info.Size() <= 44 {
+		t.Fatalf("mixed audio path %s: %v", metadata.AudioPath, err)
+	}
+}

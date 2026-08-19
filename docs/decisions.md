@@ -30,6 +30,10 @@
 
 ## 2026-08-17 System audio is a second recorder source
 
+This is the Python-era capture design. The Go Phase 2 design below supersedes
+its capture-time `--system` choice and its deletion of the source files; the
+Python compatibility path remains unchanged.
+
 - `risper-toggle --system` records the mic and the computer's own output at the same time, so a call can be transcribed with everyone's consent. The two captures are blended into the single `audio.wav` that transcription already reads, which leaves the session format, transcription contract, history, retranscribe, and retention untouched.
 - Speaker attribution was considered and rejected. Recording the two sides to separate files and labelling the transcript would roughly double transcription time; an LLM reading the finished text can infer who was speaking well enough for notes. The two sources are therefore mixed, not kept apart.
 - The mechanism is a `pw-record` property, `stream.capture.sink=true`, with no `--target` so it follows the default sink. Passing `--target` on its own does not work: `pw-record` silently records the default source instead, which reads as success because the mic picks up the speakers.
@@ -38,6 +42,13 @@
 - Sources are all signalled before any is waited on. Stopping them one at a time let the later source keep recording for as long as the earlier one took to exit.
 - A source that captured nothing is dropped and noted in the session errors rather than failing the recording. A failed mix does fail the session and leaves both per-source files on disk to match the existing "failures leave recoverable files behind" rule.
 - Long-call ergonomics are knowingly left alone. Transcription still runs inline and still lands on the clipboard, so an hour of audio blocks the toggle for roughly eight minutes at small.en's 0.16x realtime. Ruled out as out of scope for this change; revisit if it becomes annoying in practice.
+
+## 2026-08-19 Go recording and transcription cycle
+
+- Phase 2 moves the record, mix, transcribe, clipboard, notification, sound, and toggle cycle into Go. The Python modules remain intact and runnable while the Go command is validated; the durable session and state formats are shared so either side leaves diagnosable data behind.
+- Every Go recording starts both `pw-record` sources. The microphone goes to `audio.mic.wav`, the default sink monitor goes to `audio.system.wav`, and `ffmpeg` produces `audio.wav` with `amix=...:normalize=1`. All three files are retained. Keeping the tracks separate is what makes a later mixed transcription possible and makes `audio_retention = "7d"` account for the additional capture rather than silently discarding it.
+- `--system` no longer chooses what gets captured. It selects the mixed `audio.wav` for transcription; without it, the Go toggle transcribes `audio.mic.wav`. If the call shortcut is used to start recording, that mixed-transcription request is stored in the recording state so an ordinary shortcut can still stop it. This preserves the useful shortcut habit without making the capture decision at the first keypress.
+- The Go functional test puts stubs for `pw-record`, `ffmpeg`, `whisper-cli`, `wl-copy`, `notify-send`, and `canberra-gtk-play` on a temporary `PATH`, then runs two real toggle cycles. This tests process groups, file hand-off, source selection, clipboard input, and event boundaries without touching Rob's live audio devices or sessions.
 
 ## 2026-08-06 Audio retention is enforced
 

@@ -178,6 +178,30 @@ class SessionTests(unittest.TestCase):
         self.assertIn("audio_pruned_at", persisted)
         self.assertEqual(read_events(old)[-1]["event"], "audio.pruned")
 
+    def test_prune_deletes_go_source_tracks_with_mixed_audio(self) -> None:
+        config = self._config_with_retention("7d")
+        metadata = create_session(config)
+        source_paths = {
+            "mic": str(Path(metadata["audio_path"]).with_name("audio.mic.wav")),
+            "system": str(Path(metadata["audio_path"]).with_name("audio.system.wav")),
+        }
+        update_metadata(metadata, audio_source_paths=source_paths)
+        old_audio = self._write_audio(metadata, age_seconds=8 * 86400)
+        for path in source_paths.values():
+            source = Path(path)
+            source.write_bytes(b"RIFF source")
+            stamp = time.time() - 8 * 86400
+            os.utime(source, (stamp, stamp))
+
+        self.assertEqual(prune_expired_audio(config), 1)
+
+        self.assertFalse(old_audio.exists())
+        for path in source_paths.values():
+            self.assertFalse(Path(path).exists())
+        event = read_events(metadata)[-1]
+        self.assertEqual(event["event"], "audio.pruned")
+        self.assertEqual(set(event["audio_paths"]), {str(old_audio), *source_paths.values()})
+
     def test_prune_is_idempotent_and_ignores_sessions_without_audio(self) -> None:
         config = self._config_with_retention("1h")
         metadata = create_session(config)

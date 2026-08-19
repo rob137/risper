@@ -11,7 +11,15 @@ Run unit tests:
 
 ```bash
 ./scripts/test.sh
+go test ./...
 ```
+
+`go test ./...` includes the Phase 2 functional cycle. It places temporary
+stubs for `pw-record`, `ffmpeg`, `whisper-cli`, `wl-copy`, `notify-send`, and
+`canberra-gtk-play` on `PATH`, then runs the Go toggle through recording,
+mixing, mic-only transcription, mixed transcription, clipboard copy, and
+event checks. It does not read or write the live sessions under
+`~/.local/share/risper/sessions`.
 
 Run mutation smoke:
 

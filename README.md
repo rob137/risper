@@ -2,13 +2,13 @@
 
 Risper is a local-first Ubuntu dictation utility. It is built around durable session folders: recording creates the folder and metadata before audio capture starts, and failures leave recoverable files behind.
 
-Current state: phase 1/2 with a small daemon and CLI history. Recording, local transcription via selectable local models, session metadata, notifications, sounds, CLI history, and clipboard copy are implemented.
+Current state: phase 2 of the Go rewrite, with a small daemon and CLI history. The Go toggle owns recording, mixing, local transcription via selectable model profiles, notifications, sounds, and clipboard copy. The Python implementation remains available during the migration.
 Risper deliberately leaves completed transcripts on the clipboard instead of trying to inject text into the focused app. On GNOME Wayland that path was not reliable enough to keep in the default workflow.
 
 ## Commands
 
 - `risper`: enables autostart and starts the user daemon. `risper kill` stops it temporarily.
-- `risper-toggle`: start recording, stop recording on the next run, or cancel an active transcription. `--system` also captures computer output, for recording a call with everyone's consent.
+- `risper-toggle`: start recording, stop recording on the next run, or cancel an active transcription. Both mic and computer output are captured into separate tracks; `--system` asks transcription to use their mixed audio.
 - `risper-daemon`: marks incomplete sessions recovered on startup and stays alive for systemd.
 - `risper-open`: opens recordings, last session, last transcript, last audio, config, or copies the last transcript.
 - `risper-paste-test`: diagnostic helper for paste experiments with a real focused GTK text field.
@@ -136,6 +136,8 @@ Sessions are stored as:
 ~/.local/share/risper/sessions/
   2026-05-06_12-00-00/
     audio.wav
+    audio.mic.wav
+    audio.system.wav
     transcript.raw.txt
     transcript.clean.txt
     metadata.json
@@ -145,7 +147,7 @@ Sessions are stored as:
     pw-record.log
 ```
 
-`--system` records each source to `audio.mic.wav` and `audio.system.wav`, then blends them into the single `audio.wav` that transcription reads. The per-source files are deleted once that succeeds and left behind if it does not.
+Every Go recording captures each source to `audio.mic.wav` and `audio.system.wav`, then blends them into `audio.wav`. The default transcription reads the mic track; `--system` reads the mixed track. All three files remain available until `audio_retention` prunes the session's audio.
 
 `events.jsonl` is the structured debugging trail. It records workflow boundaries such as recorder start/stop, transcription, clipboard copy, skipped paste, and recovery. It does not store full transcript text by default.
 
@@ -165,7 +167,7 @@ Bind this command in GNOME Settings, Keyboard, View and Customize Shortcuts, Cus
 risper-toggle
 ```
 
-Bind a second shortcut to `risper-toggle --system` for calls. Either shortcut stops a recording, because the sources are read back from the session state rather than the command line.
+Bind a second shortcut to `risper-toggle --system` for calls. Both sources are captured for every recording; the flag selects mixed transcription and is remembered if it was used to start the recording. Either shortcut stops a recording, because the sources are read back from the session state rather than the command line.
 
 Double Alt is implemented as an optional Linux input-event listener in `risper-daemon`, but it is disabled by default. It needs read access to `/dev/input/event*`; on GNOME Wayland that usually means explicit input-group or udev-rule setup. See `docs/double-alt.md`.
 
