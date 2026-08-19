@@ -33,7 +33,7 @@ make_go_command() {
 make_go_command risper cmd/risper
 make_wrapper risper-toggle-python risper.toggle
 make_go_command risper-toggle cmd/risper-toggle
-make_wrapper risper-daemon risper.daemon
+make_go_command risper-daemon cmd/risper-daemon
 make_wrapper risper-open risper.open
 make_wrapper risper-paste-test risper.paste_test
 make_wrapper risper-history risper.history

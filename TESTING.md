@@ -93,9 +93,9 @@ go run ./cmd/risper diagnose last
 Daemon recovery smoke test:
 
 ```bash
-PYTHONPATH=src python3 -m risper.toggle
+go run ./cmd/risper-toggle
 pkill -INT pw-record
-PYTHONPATH=src python3 -m risper.daemon
+go run ./cmd/risper-daemon
 ```
 
 The daemon should mark any still-`recording` sessions as `recovered`.

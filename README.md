@@ -2,7 +2,7 @@
 
 Risper is a local-first Ubuntu dictation utility. It is built around durable session folders: recording creates the folder and metadata before audio capture starts, and failures leave recoverable files behind.
 
-Current state: phase 3 of the Go rewrite. The Go binary owns the command surface for service control, history, opening sessions, retranscription, model profiles, diagnostics, and benchmarking. The Go toggle owns recording, mixing, local transcription via selectable model profiles, notifications, sounds, and clipboard copy. The Python implementation remains available during the migration.
+Current state: phase 4 of the Go rewrite. Go owns the command surface, recording, mixing, local transcription, daemon recovery, audio retention, notifications, sounds, clipboard copy, and the optional Linux Double Alt listener. The Python implementation remains available during the migration; phase 5 removes it.
 Risper deliberately leaves completed transcripts on the clipboard instead of trying to inject text into the focused app. On GNOME Wayland that path was not reliable enough to keep in the default workflow.
 
 ## Commands
@@ -16,7 +16,7 @@ Risper deliberately leaves completed transcripts on the clipboard instead of try
 - `risper models`: lists, selects, and adds local transcription model profiles.
 - `risper benchmark`: measures transcription profile wall time, CPU use, and peak RSS.
 - `risper diagnose`: prints OS checks, or `risper diagnose last` for a compact session diagnostic.
-- `risper-daemon`: the existing Python startup-recovery daemon remains in place during the migration.
+- `risper-daemon`: the Go daemon performs startup recovery, audio retention pruning, and the optional Linux Double Alt listener.
 - `risper-status` and `risper-paste-test` remain Python-only and are intentionally not part of the Go port.
 
 ## Install
@@ -26,7 +26,7 @@ cd ~/personal/risper
 ./install-user.sh
 ```
 
-This creates wrappers in `~/.local/bin` and installs a reversible user service file. It does not use root and does not install dependencies.
+This builds commands in `~/.local/bin` and installs a reversible user service file. It does not use root and does not install dependencies.
 It also enables and starts the user daemon, so Risper starts automatically with your user session.
 
 Manual development run without installing:
@@ -35,6 +35,7 @@ Manual development run without installing:
 cd ~/personal/risper
 PYTHONPATH=src python3 -m risper.diagnose
 PYTHONPATH=src python3 -m risper.toggle
+go run ./cmd/risper-daemon
 ```
 
 ## Verification
@@ -157,7 +158,7 @@ Inspect the latest session without dumping transcript contents:
 risper diagnose last
 ```
 
-Recordings are never deleted automatically.
+Transcripts and metadata are kept indefinitely. Audio is pruned at startup and hourly when `audio_retention` is set, and can also be pruned on demand with `risper history --prune-audio`.
 
 ## Shortcut
 
@@ -169,7 +170,7 @@ risper-toggle
 
 Bind a second shortcut to `risper-toggle --system` for calls. Both sources are captured for every recording; the flag selects mixed transcription and is remembered if it was used to start the recording. Either shortcut stops a recording, because the sources are read back from the session state rather than the command line.
 
-Double Alt is implemented as an optional Linux input-event listener in `risper-daemon`, but it is disabled by default. It needs read access to `/dev/input/event*`; on GNOME Wayland that usually means explicit input-group or udev-rule setup. See `docs/double-alt.md`.
+Double Alt is implemented as an optional Linux input-event listener in the Go `risper-daemon`, but it is disabled by default. It needs read access to `/dev/input/event*`; on GNOME Wayland that usually means explicit input-group or udev-rule setup. See `docs/double-alt.md`.
 
 When Double Alt is enabled, tapping it during transcription cancels the active transcription instead of starting a new recording.
 
@@ -187,11 +188,11 @@ Dated snapshot, last verified 2026-08-17.
 - Automatic paste on GNOME Wayland was tested and removed from the default workflow because helper success did not reliably mean text appeared in the intended target. The transcript is copied to the clipboard instead.
 - True tray/status-window UI is not part of the default workflow. Ubuntu notifications and the GNOME microphone indicator provide the lightweight feedback.
 
-## Portability
+## Platform scope
 
-Risper is Ubuntu-first today, but the code now keeps desktop integration behind `src/risper/platforms/` and audio capture behind `src/risper/recorders.py`. See `docs/portability.md`.
-
-Future macOS/Windows work should add platform adapters and recorder backends rather than changing the dictation/session/transcription flow.
+The Go rewrite targets Rob's Ubuntu machine. Linux input handling has a small
+platform boundary in `platforms/`; macOS and Windows starter adapters remain
+Python-era material and are deliberately not part of this phase.
 
 ## License
 
