@@ -78,6 +78,12 @@ cat > "$CLIPBOARD_PATH"
 	}
 }
 
+func TestRetranscribeRejectsRemovedCopyFlag(t *testing.T) {
+	if code := Main([]string{"--copy", "last"}); code != 2 {
+		t.Fatalf("--copy returned %d, want usage error 2", code)
+	}
+}
+
 func makeSession(t *testing.T, cfg config.Config, name string) *session.Metadata {
 	t.Helper()
 	metadata, err := session.CreateAt(cfg, timeForTest(name))

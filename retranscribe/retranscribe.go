@@ -25,9 +25,6 @@ func Main(argv []string) int {
 	parser.SetOutput(os.Stderr)
 	mixed := parser.Bool("mixed", false, "transcribe the mixed mic-and-system audio")
 	system := parser.Bool("system", false, "alias for --mixed")
-	// --copy remains accepted for scripts written against the Python command;
-	// Go retranscription copies to the clipboard regardless.
-	_ = parser.Bool("copy", false, "copy the transcript (always enabled)")
 	if err := parser.Parse(args.Reorder(argv, nil)); err != nil {
 		if err == flag.ErrHelp {
 			return 0
