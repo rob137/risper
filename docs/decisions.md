@@ -45,15 +45,20 @@ capture-time `--system` choice and its deletion of the source files.
 ## 2026-08-19 Go recording and transcription cycle
 
 - Phase 2 moves the record, mix, transcribe, clipboard, notification, sound, and toggle cycle into Go. The durable session and state formats are shared so the migration leaves diagnosable data behind.
-- Every Go recording starts both `pw-record` sources. The microphone goes to `audio.mic.wav`, the default sink monitor goes to `audio.system.wav`, and `ffmpeg` produces `audio.wav` with `amix=...:normalize=1`. All three files are retained. Keeping the tracks separate is what makes a later mixed transcription possible and makes `audio_retention = "7d"` account for the additional capture rather than silently discarding it.
-- `--system` no longer chooses what gets captured. It selects the mixed `audio.wav` for transcription; without it, the Go toggle transcribes `audio.mic.wav`. If the call shortcut is used to start recording, that mixed-transcription request is stored in the recording state so an ordinary shortcut can still stop it. This preserves the useful shortcut habit without making the capture decision at the first keypress.
+- Every Go recording starts both `pw-record` sources. The microphone goes to `audio.mic.wav`, the default sink monitor goes to `audio.system.wav`, and `ffmpeg` produces `audio.wav` with `amix=...:normalize=1`. All three files are retained. Keeping the tracks separate makes the default mixed transcription reversible and makes `audio_retention = "7d"` account for the additional capture rather than silently discarding it.
+- The mixed `audio.wav` is the sole transcription input for the Go toggle. There is no capture-time or transcription-time source choice to store in the recording state. A source that captured nothing is already omitted from the mix, so a silent system track adds no transcript content or transcription cost.
 - The Go functional test puts stubs for `pw-record`, `ffmpeg`, `whisper-cli`, `wl-copy`, `notify-send`, and `canberra-gtk-play` on a temporary `PATH`, then runs two real toggle cycles. This tests process groups, file hand-off, source selection, clipboard input, and event boundaries without touching Rob's live audio devices or sessions.
 
 ## 2026-08-19 Go command surface
 
 - The remaining terminal command surface is available through one Go `risper` binary: service control, history, open, retranscribe, model profiles, diagnostics, benchmarks, and clipboard verification. Compatibility launchers preserve the established command names.
-- Go retranscription chooses `audio.mic.wav` by default for sessions with per-source tracks and accepts `--mixed` or `--system` to recover a call from `audio.wav`. Older sessions without source paths continue to use `audio.wav`.
+- Go retranscription always reads `audio.wav`. The per-source tracks remain on disk so a later tool can re-read a session differently, but the command has no source-selection flags.
 - The Go path deliberately has no paste helper implementation. It normalizes legacy paste modes to `clipboard_only`, copies completed retranscriptions to the clipboard, and keeps the four historical paste metadata fields loadable and consistently false.
+
+## 2026-08-19 Mixed audio is the transcription default
+
+- The earlier mic-only default was meant to avoid putting song lyrics into notes when music was playing. That reasoning is superseded by how Rob actually prompts: he does not listen to music or other material while dictating, so any computer-output audio should be included when it exists.
+- The mixed `audio.wav` is therefore transcribed by default in both the toggle and retranscribe paths. The source-selection flags are removed because they no longer express a real choice. The separate mic and system files remain on disk so this decision stays reversible through a later tool.
 
 ## 2026-08-06 Audio retention is enforced
 
@@ -70,6 +75,6 @@ capture-time `--system` choice and its deletion of the source files.
 - Phase 5 removes the old source and test trees, packaging metadata, and mutation-runner wrapper. `go test ./...` is the test gate and `scripts/mutation-smoke.sh` remains the focused mutation check.
 - `install-user.sh` builds one Go binary, installs the ten established compatibility launchers, installs the service and desktop files, and restarts the daemon in the same command. Source edits therefore become live only after a build, install, and restart.
 - The standalone status window and automatic paste experiment are not part of the Go workflow. `risper-status` reports service status, while `risper-paste-test` copies a marker for manual clipboard verification.
-- Double Alt reads Linux `/dev/input/event*` devices with per-device detector state, kernel event timestamps, stale-state recovery, and device re-registration after read failure. It logs discarded tap attempts as well as successful triggers, so a dead stretch is diagnosable rather than silent. A trigger runs the ordinary Go toggle with no audio-source decision; mixed call recovery remains an explicit `risper retranscribe --mixed` operation.
+- Double Alt reads Linux `/dev/input/event*` devices with per-device detector state, kernel event timestamps, stale-state recovery, and device re-registration after read failure. It logs discarded tap attempts as well as successful triggers, so a dead stretch is diagnosable rather than silent. A trigger runs the ordinary Go toggle, which transcribes the mixed capture by default.
 - The portability direction is deliberately reversed from the 2026-05-06 entry: this is a one-user Ubuntu tool, so macOS and Windows starter adapters and `docs/portability.md` are not ported in the Go rewrite. The Go `platforms/` package is only the narrow Linux input boundary. Session-type detection remains in session metadata, implemented directly from the Linux session environment rather than carried through those unused adapters.
 - Audio retention is now live in the daemon as well as the command surface. Rob's `audio_retention = "7d"` means the three Go capture files are pruned together while transcripts and metadata stay indefinitely.

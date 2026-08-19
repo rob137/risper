@@ -12,7 +12,7 @@ import (
 	"github.com/rob137/risper/session"
 )
 
-func TestRetranscribeDefaultsToMicAndSupportsMixedAudio(t *testing.T) {
+func TestRetranscribeUsesMixedAudioByDefault(t *testing.T) {
 	root := t.TempDir()
 	bin := filepath.Join(root, "bin")
 	if err := os.Mkdir(bin, 0o755); err != nil {
@@ -51,22 +51,16 @@ cat > "$CLIPBOARD_PATH"
 		t.Fatal(err)
 	}
 	if code := Main([]string{first.SessionID}); code != 0 {
-		t.Fatalf("mic retranscribe returned %d", code)
+		t.Fatalf("first retranscribe returned %d", code)
 	}
 	second := makeSession(t, cfg, "second")
-	if code := Main([]string{"--mixed", second.SessionID}); code != 0 {
-		t.Fatalf("mixed retranscribe returned %d", code)
+	if code := Main([]string{second.SessionID}); code != 0 {
+		t.Fatalf("second retranscribe returned %d", code)
 	}
 
 	log := readFile(t, logPath)
-	if !strings.Contains(log, first.AudioSourcePaths["mic"]) {
-		t.Fatalf("mic path not used: %q", log)
-	}
-	if strings.Contains(log, first.AudioPath) {
-		t.Fatalf("mic retranscribe used mixed path: %q", log)
-	}
-	if !strings.Contains(log, second.AudioPath) {
-		t.Fatalf("mixed path not used: %q", log)
+	if !strings.Contains(log, first.AudioPath) || !strings.Contains(log, second.AudioPath) || strings.Contains(log, first.AudioSourcePaths["mic"]) || strings.Contains(log, second.AudioSourcePaths["mic"]) {
+		t.Fatalf("default retranscribe paths = %q", log)
 	}
 	if got := strings.TrimSpace(readFile(t, clipboardPath)); got != "retranscribed transcript" {
 		t.Fatalf("clipboard = %q", got)
@@ -88,6 +82,14 @@ cat > "$CLIPBOARD_PATH"
 func TestRetranscribeRejectsRemovedCopyFlag(t *testing.T) {
 	if code := Main([]string{"--copy", "last"}); code != 2 {
 		t.Fatalf("--copy returned %d, want usage error 2", code)
+	}
+}
+
+func TestRetranscribeRejectsRemovedAudioSourceFlags(t *testing.T) {
+	for _, flag := range []string{"--mixed", "--system"} {
+		if code := Main([]string{flag, "last"}); code != 2 {
+			t.Fatalf("%s returned %d, want usage error 2", flag, code)
+		}
 	}
 }
 

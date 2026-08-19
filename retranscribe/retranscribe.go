@@ -23,8 +23,6 @@ import (
 func Main(argv []string) int {
 	parser := flag.NewFlagSet("risper retranscribe", flag.ContinueOnError)
 	parser.SetOutput(os.Stderr)
-	mixed := parser.Bool("mixed", false, "transcribe the mixed mic-and-system audio")
-	system := parser.Bool("system", false, "alias for --mixed")
 	if err := parser.Parse(args.Reorder(argv, nil)); err != nil {
 		if err == flag.ErrHelp {
 			return 0
@@ -51,8 +49,7 @@ func Main(argv []string) int {
 		fmt.Fprintln(os.Stderr, "No such session: "+sessionID)
 		return 1
 	}
-	useMixed := *mixed || *system
-	audioPath := selectedAudioPath(metadata, useMixed)
+	audioPath := selectedAudioPath(metadata)
 	if _, err := os.Stat(audioPath); err != nil {
 		fmt.Fprintln(os.Stderr, session.MissingAudioMessage(metadata))
 		return 1
@@ -61,25 +58,19 @@ func Main(argv []string) int {
 	if err != nil {
 		return failSession(cfg, metadata, err)
 	}
-	return run(cfg, metadata, profile, audioPath, useMixed)
+	return run(cfg, metadata, profile, audioPath)
 }
 
-func selectedAudioPath(metadata *session.Metadata, mixed bool) string {
+func selectedAudioPath(metadata *session.Metadata) string {
 	if metadata == nil {
 		return ""
 	}
-	if mixed {
-		return metadata.AudioPath
-	}
-	if path := metadata.AudioSourcePaths["mic"]; path != "" {
-		return path
-	}
-	// Sessions created before Go recorded per-source tracks only have
-	// audio.wav. That remains the compatible default for old metadata.
+	// The mixed file is the durable transcription contract for both current
+	// and older sessions. Per-source tracks remain available for future tools.
 	return metadata.AudioPath
 }
 
-func run(cfg config.Config, metadata *session.Metadata, profile models.Profile, audioPath string, mixed bool) int {
+func run(cfg config.Config, metadata *session.Metadata, profile models.Profile, audioPath string) int {
 	dir := session.SessionDir(metadata)
 	metadata.Status = "transcribing"
 	metadata.TranscriptionEngine = profile.Engine
@@ -88,10 +79,10 @@ func run(cfg config.Config, metadata *session.Metadata, profile models.Profile, 
 	if err := session.SaveMetadata(metadata); err != nil {
 		return reportError(err)
 	}
-	appendLog(filepath.Join(dir, session.StatusLogFile), "starting retranscription audio_source="+audioSourceName(mixed))
+	appendLog(filepath.Join(dir, session.StatusLogFile), "starting retranscription audio_source=mixed")
 	_, _ = events.Append(dir, "retranscription.starting", map[string]any{
 		"profile": profile.ID, "engine": profile.Engine, "model": profile.Model,
-		"language": profile.Language, "audio_path": audioPath, "audio_source": audioSourceName(mixed),
+		"language": profile.Language, "audio_path": audioPath, "audio_source": "mixed",
 	})
 	desktop.Notify(cfg, "📝 Retranscribing speech", "Using "+profile.ID+".")
 	desktop.Play(cfg, "transcription_start")
@@ -111,7 +102,7 @@ func run(cfg config.Config, metadata *session.Metadata, profile models.Profile, 
 	}
 	_, _ = events.Append(dir, "retranscription.completed", map[string]any{
 		"raw_path": metadata.TranscriptRawPath, "clean_path": metadata.TranscriptCleanPath,
-		"transcript_chars": len([]rune(transcript)), "audio_source": audioSourceName(mixed),
+		"transcript_chars": len([]rune(transcript)), "audio_source": "mixed",
 	})
 
 	copied, clipboardMessage := desktop.CopyText(transcript)
@@ -163,13 +154,6 @@ func failSession(cfg config.Config, metadata *session.Metadata, err error) int {
 	desktop.Play(cfg, "error")
 	fmt.Fprintln(os.Stderr, message)
 	return 1
-}
-
-func audioSourceName(mixed bool) string {
-	if mixed {
-		return "mixed"
-	}
-	return "mic"
 }
 
 func appendLog(path, message string) error {

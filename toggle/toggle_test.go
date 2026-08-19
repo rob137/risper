@@ -139,8 +139,8 @@ prompt = "Names and terms: Abdullah, coEngen, Singular Machines, Culham, Adrian,
 		t.Fatalf("successful transcription retained stale errors: %#v", first.Errors)
 	}
 	whisperLog := readFile(t, filepath.Join(root, "whisper.log"))
-	if !strings.Contains(whisperLog, ".mic.wav") {
-		t.Fatalf("default transcription did not use mic track: %q", whisperLog)
+	if !strings.Contains(whisperLog, first.AudioPath) || strings.Contains(whisperLog, first.AudioSourcePaths["mic"]) {
+		t.Fatalf("default transcription did not use mixed track: %q", whisperLog)
 	}
 	if !strings.Contains(whisperLog, "<Names and terms: Abdullah, coEngen, Singular Machines, Culham, Adrian, James, Will, Flic, Claude, Claude Code, Codex, ChatGPT, Emacs, Temporal, divertor. Plainer, shorter.>") {
 		t.Fatalf("prompt was not preserved as one argument: %q", whisperLog)
@@ -153,11 +153,11 @@ prompt = "Names and terms: Abdullah, coEngen, Singular Machines, Culham, Adrian,
 	}
 	assertAudioFiles(t, first)
 
-	if code := Main([]string{"--system"}); code != 0 {
-		t.Fatalf("mixed start returned %d", code)
+	if code := Main(nil); code != 0 {
+		t.Fatalf("second start returned %d", code)
 	}
 	if code := Main(nil); code != 0 {
-		t.Fatalf("mixed stop returned %d", code)
+		t.Fatalf("second stop returned %d", code)
 	}
 	allSessions, err := session.All(cfg)
 	if err != nil || len(allSessions) != 2 {
@@ -177,8 +177,8 @@ prompt = "Names and terms: Abdullah, coEngen, Singular Machines, Culham, Adrian,
 		t.Fatalf("second status = %q, errors=%v", second.Status, second.Errors)
 	}
 	whisperLog = readFile(t, filepath.Join(root, "whisper.log"))
-	if strings.Count(whisperLog, ".mic.wav") != 1 || !strings.Contains(whisperLog, second.AudioPath) || strings.Contains(whisperLog, second.AudioSourcePaths["mic"]) {
-		t.Fatalf("mixed transcription paths = %q", whisperLog)
+	if strings.Count(whisperLog, first.AudioPath) != 1 || strings.Count(whisperLog, second.AudioPath) != 1 || strings.Contains(whisperLog, second.AudioSourcePaths["mic"]) {
+		t.Fatalf("default transcription paths = %q", whisperLog)
 	}
 	if got := strings.TrimSpace(readFile(t, clipboard)); got != "phase two transcript" {
 		t.Fatalf("clipboard = %q", got)
@@ -212,6 +212,12 @@ prompt = "Names and terms: Abdullah, coEngen, Singular Machines, Culham, Adrian,
 				t.Fatalf("session %s missing event %s: %#v", metadata.SessionID, required, records)
 			}
 		}
+	}
+}
+
+func TestToggleRejectsRemovedAudioSourceFlag(t *testing.T) {
+	if code := Main([]string{"--system"}); code != 2 {
+		t.Fatalf("--system returned %d, want usage error 2", code)
 	}
 }
 

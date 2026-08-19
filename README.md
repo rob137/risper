@@ -7,10 +7,10 @@ The Go rewrite is complete. Go owns recording, mixing, local transcription, clip
 ## Commands
 
 - `risper`: enables autostart and starts the user daemon. `risper kill` stops it temporarily.
-- `risper toggle`: starts recording, stops it on the next run, or cancels an active transcription. `--system` transcribes the mixed microphone and computer-output track.
+- `risper toggle`: starts recording, stops it on the next run, or cancels an active transcription. Transcription includes the microphone and computer-output capture.
 - `risper history`: lists recent sessions and opens, plays, copies, retranscribes, deletes, or prunes them.
 - `risper open`: opens recordings, the last session, the last transcript, the last audio file, or the config.
-- `risper retranscribe`: retranscribes a saved session; `--mixed` selects the mixed track.
+- `risper retranscribe`: retranscribes a saved session from its mixed audio.
 - `risper models`: lists, selects, and adds local transcription model profiles.
 - `risper benchmark`: measures transcription profile wall time, CPU use, and peak RSS.
 - `risper diagnose`: prints environment or session diagnostics.
@@ -150,7 +150,7 @@ Sessions are stored as:
     pw-record.log
 ```
 
-Every Go recording captures microphone and computer output separately, then blends them into `audio.wav`. Default transcription reads `audio.mic.wav`; `--system` selects the mixed track for transcription. Both source tracks are captured regardless of that flag. Audio remains until `audio_retention` prunes it.
+Every Go recording captures microphone and computer output separately, then blends the sources into `audio.wav`. Transcription always reads that mixed file, while `audio.mic.wav` and `audio.system.wav` remain available for a later re-read. If one source is silent, it is dropped from the mix, so it adds no transcription content or cost. Audio remains until `audio_retention` prunes it.
 
 `events.jsonl` is the structured debugging trail. It records workflow boundaries without storing full transcript text by default. Transcripts and metadata are retained indefinitely.
 
@@ -168,7 +168,7 @@ Bind this command in GNOME Settings, Keyboard, View and Customize Shortcuts, Cus
 risper-toggle
 ```
 
-Bind a second shortcut to `risper-toggle --system` for calls. Both sources are captured for every recording; the flag selects mixed transcription and is remembered if it was used to start the recording.
+Both sources are captured and included for every recording; the ordinary `risper-toggle` shortcut is all that is needed.
 
 Double Alt is an optional Linux input-event listener in `risper-daemon`, disabled by default. It needs read access to `/dev/input/event*`; see `docs/double-alt.md`.
 

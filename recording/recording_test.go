@@ -85,7 +85,7 @@ esac
 		TranscriptionEngine: "external",
 	}
 
-	state, err := Start(cfg, false)
+	state, err := Start(cfg)
 	if err == nil || state != nil || !strings.Contains(err.Error(), "pw-record mic exited during startup") {
 		t.Fatalf("Start() = state %v, err %v", state, err)
 	}

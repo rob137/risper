@@ -8,7 +8,7 @@ Run:
 risper diagnose
 ```
 
-Check whether `pw-record` is present. Session-specific recorder stderr is stored in `pw-record.log`, and in `pw-record.system.log` for the `--system` source.
+Check whether `pw-record` is present. Session-specific recorder stderr is stored in `pw-record.log`, and in `pw-record.system.log` for the computer-output source.
 
 ## Nothing From The Other Side Of A Call
 

@@ -31,18 +31,17 @@ const wavHeaderBytes = 44
 const recorderStartupGrace = 100 * time.Millisecond
 
 // State is the cross-process marker for the two recorders belonging to one
-// session. TranscriptionSource is a request, not a capture choice: both
-// sources are always recorded.
+// session. Both sources are always recorded and the mixed output is always
+// used for transcription.
 type State struct {
-	SessionDir          string            `json:"session_dir"`
-	MetadataPath        string            `json:"metadata_path"`
-	AudioPath           string            `json:"audio_path"`
-	Sources             []Source          `json:"sources"`
-	RecorderPIDs        map[string]int    `json:"recorder_pids"`
-	PartPaths           map[string]string `json:"part_paths"`
-	RecorderBackend     string            `json:"recorder_backend"`
-	StartedAt           string            `json:"started_at"`
-	TranscriptionSource Source            `json:"transcription_source"`
+	SessionDir      string            `json:"session_dir"`
+	MetadataPath    string            `json:"metadata_path"`
+	AudioPath       string            `json:"audio_path"`
+	Sources         []Source          `json:"sources"`
+	RecorderPIDs    map[string]int    `json:"recorder_pids"`
+	PartPaths       map[string]string `json:"part_paths"`
+	RecorderBackend string            `json:"recorder_backend"`
+	StartedAt       string            `json:"started_at"`
 }
 
 func SourcePath(audioPath string, source Source) string {
@@ -82,7 +81,7 @@ func Current(cfg config.Config) (*State, error) {
 	return nil, nil
 }
 
-func Start(cfg config.Config, requestMixed bool) (*State, error) {
+func Start(cfg config.Config) (*State, error) {
 	if current, err := Current(cfg); err != nil {
 		return nil, err
 	} else if current != nil {
@@ -169,30 +168,24 @@ func Start(cfg config.Config, requestMixed bool) (*State, error) {
 		}
 	}
 
-	transcriptionSource := Mic
-	if requestMixed {
-		transcriptionSource = Mixed
-	}
 	state := &State{
-		SessionDir:          sessionDir,
-		MetadataPath:        session.MetadataPath(sessionDir),
-		AudioPath:           metadata.AudioPath,
-		Sources:             []Source{Mic, System},
-		RecorderPIDs:        pids,
-		PartPaths:           partPaths,
-		RecorderBackend:     "pw-record",
-		StartedAt:           metadata.StartedAt,
-		TranscriptionSource: transcriptionSource,
+		SessionDir:      sessionDir,
+		MetadataPath:    session.MetadataPath(sessionDir),
+		AudioPath:       metadata.AudioPath,
+		Sources:         []Source{Mic, System},
+		RecorderPIDs:    pids,
+		PartPaths:       partPaths,
+		RecorderBackend: "pw-record",
+		StartedAt:       metadata.StartedAt,
 	}
 	if err := files.AtomicWriteJSON(cfg.CurrentStatePath, state); err != nil {
 		stopPIDs(pids)
 		return nil, err
 	}
-	appendLog(statusLog, fmt.Sprintf("pw-record pids=%v transcription_source=%s", pids, transcriptionSource))
+	appendLog(statusLog, fmt.Sprintf("pw-record pids=%v", pids))
 	if _, err := events.Append(sessionDir, "recorder.started", map[string]any{
-		"backend":              "pw-record",
-		"pids":                 pids,
-		"transcription_source": transcriptionSource,
+		"backend": "pw-record",
+		"pids":    pids,
 	}); err != nil {
 		return nil, err
 	}

@@ -23,7 +23,6 @@ const version = "0.1.0"
 func Main(args []string) int {
 	parser := flag.NewFlagSet("risper-toggle", flag.ContinueOnError)
 	parser.SetOutput(os.Stderr)
-	system := parser.Bool("system", false, "transcribe the mixed mic and computer-output audio")
 	if err := parser.Parse(args); err != nil {
 		return 2
 	}
@@ -54,11 +53,10 @@ func Main(args []string) int {
 		if stopErr != nil {
 			return fail(cfg, stopErr)
 		}
-		useMixed := *system || state.TranscriptionSource == recording.Mixed
-		return finishSession(cfg, metadata, useMixed)
+		return finishSession(cfg, metadata)
 	}
 
-	state, err := recording.Start(cfg, *system)
+	state, err := recording.Start(cfg)
 	if err != nil {
 		return fail(cfg, err)
 	}
@@ -80,7 +78,7 @@ func fail(cfg config.Config, err error) int {
 	return 1
 }
 
-func finishSession(cfg config.Config, metadata *session.Metadata, useMixed bool) int {
+func finishSession(cfg config.Config, metadata *session.Metadata) int {
 	if metadata == nil {
 		return fail(cfg, errors.New("recording returned no session metadata"))
 	}
@@ -97,12 +95,6 @@ func finishSession(cfg config.Config, metadata *session.Metadata, useMixed bool)
 	}
 	audioPath := metadata.AudioPath
 	audioSource := recording.Mixed
-	if !useMixed {
-		audioSource = recording.Mic
-		if path := metadata.AudioSourcePaths[string(recording.Mic)]; path != "" {
-			audioPath = path
-		}
-	}
 	if info, err := os.Stat(audioPath); err != nil {
 		return transcriptionFailure(cfg, metadata, fmt.Errorf("audio source %s is unavailable: %w", audioSource, err))
 	} else if info.Size() <= 44 {

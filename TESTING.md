@@ -65,12 +65,12 @@ Expected:
 - Running `risper-toggle` during transcription cancels it.
 - No daemon-owned status window appears during dictation.
 
-## System audio
+## Mixed audio
 
-With something playing through the current output device, use `--system` to select the mixed mic-and-system track for transcription:
+With something playing through the current output device, use the normal toggle cycle. Both sources are captured and the mixed track is transcribed by default:
 
 ```bash
-risper-toggle --system
+risper-toggle
 risper-toggle
 ```
 

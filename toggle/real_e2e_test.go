@@ -128,7 +128,7 @@ func TestRealSystemAudioCycle(t *testing.T) {
 		}
 	}()
 
-	if code := Main([]string{"--system"}); code != 0 {
+	if code := Main(nil); code != 0 {
 		t.Fatalf("real system-audio recording start returned %d", code)
 	}
 	active = true
