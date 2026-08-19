@@ -21,7 +21,7 @@ const DefaultModels = `# Risper model profiles.
 # engine = "whisper.cpp"
 # model = "base.en"
 # language = "en"
-# command = "/path/to/whisper-cli -m /path/to/model.bin -f {audio} -l {language} --prompt \"{prompt}\" -nt -otxt -of {raw_no_txt}"
+# command = "/path/to/whisper-cli -m /path/to/model.bin -f {audio} -l {language} --prompt \"{prompt}\" -nt -otxt -of {raw_no_txt} -mc 0"
 #
 # An optional ` + "`prompt`" + ` biases decoding toward the words it lists (proper nouns,
 # names, jargon). It is rendered into the command's {prompt} placeholder. Keep it

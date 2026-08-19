@@ -91,6 +91,41 @@ printf 'prompt test transcript\n'
 	}
 }
 
+func TestTranscribeAddsWhisperContextGuardWhenProfileOmitsIt(t *testing.T) {
+	root := t.TempDir()
+	bin := filepath.Join(root, "bin")
+	if err := os.Mkdir(bin, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	argumentsPath := filepath.Join(root, "arguments.log")
+	engine := `#!/bin/sh
+for arg in "$@"; do
+  printf '<%s>\n' "$arg" >> "$ARGUMENTS_LOG"
+done
+printf 'guarded transcript\n'
+`
+	if err := os.WriteFile(filepath.Join(bin, "whisper-cli"), []byte(engine), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
+	t.Setenv("ARGUMENTS_LOG", argumentsPath)
+
+	transcript, err := Transcribe(models.Profile{
+		Engine:  "whisper.cpp",
+		Command: "whisper-cli -f {audio}",
+	}, "audio.wav", filepath.Join(root, "raw.txt"), filepath.Join(root, "clean.txt"), nil)
+	if err != nil || transcript != "guarded transcript" {
+		t.Fatalf("transcription = %q, %v", transcript, err)
+	}
+	arguments, err := os.ReadFile(argumentsPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(arguments), "<-mc>\n<0>\n") {
+		t.Fatalf("whisper context guard missing: %q", arguments)
+	}
+}
+
 func TestTranscribeReturnsEngineError(t *testing.T) {
 	root := t.TempDir()
 	rawPath := filepath.Join(root, "raw.txt")

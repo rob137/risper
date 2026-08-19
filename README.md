@@ -103,7 +103,7 @@ Installed whisper.cpp shape:
 
 ```toml
 transcription_engine = "whisper.cpp"
-transcription_command = "/home/robert-kirby/.local/share/risper/engines/whisper.cpp/build/bin/whisper-cli -m /home/robert-kirby/.local/share/risper/engines/whisper.cpp/models/ggml-small.en.bin -f {audio} -l {language} -t 8 -nt -otxt -of {raw_no_txt}"
+transcription_command = "/home/robert-kirby/.local/share/risper/engines/whisper.cpp/build/bin/whisper-cli -m /home/robert-kirby/.local/share/risper/engines/whisper.cpp/models/ggml-small.en.bin -f {audio} -l {language} -t 8 -nt -otxt -of {raw_no_txt} -mc 0"
 ```
 
 List or select profiles:

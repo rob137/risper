@@ -86,12 +86,27 @@ func RenderCommand(profile models.Profile, audioPath, rawPath, cleanPath string)
 	for placeholder, value := range replacements {
 		rendered = strings.ReplaceAll(rendered, placeholder, value)
 	}
+	if profile.Engine == "whisper.cpp" && !hasWhisperMaxContext(rendered) {
+		// whisper.cpp's default carries all prior decoded text into later
+		// segments. On a quiet mic passage that can suppress real speech; a
+		// zero max-context keeps each segment acoustically grounded.
+		rendered = strings.TrimSpace(rendered) + " -mc 0"
+	}
 	if strings.HasPrefix(rendered, "~/") && !strings.ContainsAny(rendered, " \t\n") {
 		if home, err := os.UserHomeDir(); err == nil {
 			rendered = filepath.Join(home, rendered[2:])
 		}
 	}
 	return rendered
+}
+
+func hasWhisperMaxContext(command string) bool {
+	for _, field := range strings.Fields(command) {
+		if field == "-mc" || field == "--max-context" || strings.HasPrefix(field, "-mc=") || strings.HasPrefix(field, "--max-context=") {
+			return true
+		}
+	}
+	return false
 }
 
 func renderCommand(profile models.Profile, audioPath, rawPath, cleanPath string) string {

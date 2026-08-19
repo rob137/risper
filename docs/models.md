@@ -28,7 +28,7 @@ Profile shape:
 engine = "whisper.cpp"
 model = "base.en"
 language = "en"
-command = "/path/to/whisper-cli -m /path/to/model.bin -f {audio} -l {language} -nt -otxt -of {raw_no_txt}"
+command = "/path/to/whisper-cli -m /path/to/model.bin -f {audio} -l {language} -nt -otxt -of {raw_no_txt} -mc 0"
 ```
 
 Placeholders:
