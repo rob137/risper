@@ -38,6 +38,15 @@ quiet instead of repeatedly recognizing sustained speech. The fast `base.en`
 profile is the default because the selected `small.en` profile is for
 dictation accuracy, not control latency.
 
+The trigger path uses the selected profile for its model and whisper.cpp
+command, but does not inherit the profile's dictation prompt or decode
+settings. It replaces the prompt with only the three configured trigger words
+(`Trigger words: quasar, marzipan, tangerine.` in the defaults) and forces
+greedy single-word decoding with `-bs 1 -bo 1`. The common whisper.cpp command
+renderer also supplies `-mc 0` when the profile does not already set it. These
+overrides apply only to trigger recognition; ordinary dictation keeps its
+profile prompt and settings.
+
 Say the start word by itself to run ordinary `risper-toggle`. While recording,
 the stop word runs `risper-toggle --paste --voice-stop`; the send word runs
 `risper-toggle --paste --enter --voice-send`. The spoken stop/send word is
@@ -46,9 +55,26 @@ not pasted or submitted. If the command fails or paste is unavailable, the
 existing recoverable session and clipboard behavior still applies.
 
 The practical latency is the end of the word, the configured silence window,
-and one short `base.en` recognition pass. This avoids continuously polling
-whisper over a rolling window. It is not a dedicated always-loaded wake-word
-engine, so “instant” remains a measured target rather than a promise.
+and one `base.en` recognition pass. On Rob's machine, with `-t 8`, a 0.8s
+single-word burst took about 0.49–0.52s wall time and 3.1–3.2s CPU with the
+trigger settings. The default decoder took about 0.52s on one slice but 1.39s
+on another; the expensive case is content-dependent because whisper pads each
+invocation to a 30s window and can search much longer on near-empty audio.
+The old full dictation prompt added roughly 20–25% in the second measurement
+and reached 1.47s wall / 10.5s CPU in the first. The trigger prompt and greedy
+settings therefore make the existing architecture as predictable as it can be,
+but there is still a roughly 0.5s per-invocation floor: feeding a shorter burst
+does not remove whisper's 30s padding. With the default 400ms silence window,
+roughly 0.9s end-to-end is the honest target. This is not a dedicated
+always-loaded wake-word engine, so a ~0.2s target remains a separate future
+decision rather than a promise here.
+
+The `transcription_start` desktop sound starts when the stop-to-transcribe
+path begins but no longer blocks recognition, clipboard copy, or paste. The
+toggle waits for its helper only before the process exits, so the sound cannot
+outlive a toggle-cycle test's temporary directory. The recording-start and
+success sounds remain synchronous because they only affect process exit, not
+the stop-to-paste pipeline.
 
 Enabling the feature requires the configured voice profile to exist in
 `models.toml`, `pw-record` to be available, and the daemon to be restarted.

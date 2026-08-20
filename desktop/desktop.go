@@ -168,16 +168,48 @@ func isDigits(value string) bool {
 }
 
 func Play(cfg config.Config, kind string) {
+	PlayAsync(cfg, kind).Wait()
+}
+
+// Playback is a handle for a sound helper started by PlayAsync. Waiting for
+// it is useful at a lifecycle boundary, such as before a toggle process exits,
+// without putting the sound itself on the work path.
+type Playback struct {
+	done <-chan struct{}
+}
+
+// PlayAsync starts a sound helper immediately and returns without waiting for
+// the sound to finish. The helper is still reaped, and callers that own a
+// lifecycle boundary can call Wait to keep it from outliving that boundary.
+func PlayAsync(cfg config.Config, kind string) Playback {
+	done := make(chan struct{})
 	if !cfg.PlaySounds || !config.CommandExists("canberra-gtk-play") {
-		return
+		close(done)
+		return Playback{done: done}
 	}
 	event, volume := sound(kind)
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
-	defer cancel()
 	cmd := exec.CommandContext(ctx, "canberra-gtk-play", "-i", event, "-V", volume, "-d", "Risper "+kind)
 	cmd.Stdout = io.Discard
 	cmd.Stderr = io.Discard
-	_ = cmd.Run()
+	if err := cmd.Start(); err != nil {
+		cancel()
+		close(done)
+		return Playback{done: done}
+	}
+	go func() {
+		_ = cmd.Wait()
+		cancel()
+		close(done)
+	}()
+	return Playback{done: done}
+}
+
+// Wait blocks until the sound helper exits or its three-second cap expires.
+func (playback Playback) Wait() {
+	if playback.done != nil {
+		<-playback.done
+	}
 }
 
 func sound(kind string) (string, string) {

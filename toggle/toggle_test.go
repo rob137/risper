@@ -56,13 +56,22 @@ printf '%s\n' "${WHISPER_TEXT:-phase two transcript}" > "${output}.txt"
 `,
 		"wl-copy": `#!/bin/sh
 cat > "$CLIPBOARD_PATH"
+printf 'clipboard\n' >> "$ORDER_LOG"
 `,
 		"notify-send": `#!/bin/sh
 printf '%s\n' "$*" >> "$NOTIFY_LOG"
 printf '42\n'
 `,
 		"canberra-gtk-play": `#!/bin/sh
-printf '%s\n' "$*" >> "$SOUND_LOG"
+args="$*"
+printf '%s\n' "$args" >> "$SOUND_LOG"
+case "$args" in
+  *service-login*)
+    printf 'transcription-started\n' >> "$ORDER_LOG"
+    if [ -n "${TRANSCRIPTION_SOUND_DELAY:-}" ]; then sleep "$TRANSCRIPTION_SOUND_DELAY"; fi
+    printf 'transcription-finished\n' >> "$ORDER_LOG"
+    ;;
+esac
 `,
 		"ydotool": `#!/bin/sh
 printf '%s\n' "$*" >> "$YDOTOOL_LOG"
@@ -89,6 +98,7 @@ exit "${YDOTOOL_EXIT:-0}"
 		"NOTIFY_LOG":       filepath.Join(root, "notify.log"),
 		"SOUND_LOG":        filepath.Join(root, "sound.log"),
 		"YDOTOOL_LOG":      filepath.Join(root, "ydotool.log"),
+		"ORDER_LOG":        filepath.Join(root, "order.log"),
 	} {
 		t.Setenv(key, value)
 	}
@@ -264,6 +274,28 @@ func TestTogglePastesAndSubmitsWhenAsked(t *testing.T) {
 	}
 }
 
+func TestToggleDoesNotPutTranscriptionSoundOnClipboardPath(t *testing.T) {
+	root, _ := stubEnvironment(t)
+	t.Setenv("TRANSCRIPTION_SOUND_DELAY", "0.5")
+	if code := Main(nil); code != 0 {
+		t.Fatalf("start returned %d", code)
+	}
+	if code := Main(nil); code != 0 {
+		t.Fatalf("stop returned %d", code)
+	}
+
+	lines := strings.Split(strings.TrimSpace(readFile(t, filepath.Join(root, "order.log"))), "\n")
+	started := indexOf(lines, "transcription-started")
+	clipboard := indexOf(lines, "clipboard")
+	finished := indexOf(lines, "transcription-finished")
+	if started < 0 || clipboard < 0 || finished < 0 {
+		t.Fatalf("sound/clipboard order = %#v", lines)
+	}
+	if finished < clipboard {
+		t.Fatalf("transcription sound finished before clipboard: %#v", lines)
+	}
+}
+
 func TestToggleRemovesVoiceStopWordBeforePaste(t *testing.T) {
 	root, cfg := stubEnvironment(t)
 	t.Setenv("WHISPER_TEXT", "phase two transcript marzipan.")
@@ -348,6 +380,15 @@ func readFile(t *testing.T, path string) string {
 		t.Fatal(err)
 	}
 	return string(data)
+}
+
+func indexOf(lines []string, want string) int {
+	for index, line := range lines {
+		if line == want {
+			return index
+		}
+	}
+	return -1
 }
 
 func assertAudioFiles(t *testing.T, metadata *session.Metadata) {

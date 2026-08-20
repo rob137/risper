@@ -12,6 +12,7 @@ import (
 	"io"
 	"math"
 	"os/exec"
+	"regexp"
 	"strings"
 	"sync"
 	"syscall"
@@ -211,7 +212,6 @@ func (listener *linuxListener) readFrames(stream io.Reader, segments chan<- []in
 }
 
 func (listener *linuxListener) recognize(ctx context.Context, profile models.Profile, segments <-chan []int16) {
-	profile.Prompt = strings.TrimSpace(profile.Prompt + " Trigger words: " + listener.cfg.VoiceStartWord + ", " + listener.cfg.VoiceStopWord + ", " + listener.cfg.VoiceSendWord + ".")
 	for segment := range segments {
 		if ctx.Err() != nil {
 			return
@@ -242,7 +242,23 @@ func triggerProfile(cfg config.Config) (models.Profile, error) {
 	if profile.Engine != "whisper.cpp" {
 		return models.Profile{}, fmt.Errorf("profile %q uses engine %q; voice triggers require whisper.cpp", profile.ID, profile.Engine)
 	}
+	// The selected profile supplies the model and command template, but its
+	// prompt and normal dictation decode settings are not appropriate for
+	// spotting one of three words. Keep those trigger-specific choices here so
+	// the general profile remains useful for dictation.
+	profile.Prompt = fmt.Sprintf("Trigger words: %s, %s, %s.", cfg.VoiceStartWord, cfg.VoiceStopWord, cfg.VoiceSendWord)
+	profile.Command = setWhisperOption(profile.Command, "-bs", "--beam-size", "1")
+	profile.Command = setWhisperOption(profile.Command, "-bo", "--best-of", "1")
 	return profile, nil
+}
+
+func setWhisperOption(command, short, long, value string) string {
+	pattern := `(^|[[:space:]])(?:` + regexp.QuoteMeta(short) + `|` + regexp.QuoteMeta(long) + `)(?:=|[[:space:]])[^[:space:]]+`
+	option := regexp.MustCompile(pattern)
+	if option.MatchString(command) {
+		return option.ReplaceAllString(command, `${1}`+short+" "+value)
+	}
+	return strings.TrimSpace(command) + " " + short + " " + value
 }
 
 // MatchTrigger only accepts an utterance that decoded to one word. This keeps

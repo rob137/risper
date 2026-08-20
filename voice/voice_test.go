@@ -4,9 +4,13 @@ import (
 	"bytes"
 	"context"
 	"io"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/rob137/risper/config"
 )
 
 func TestMatchTriggerRequiresOneConfiguredWord(t *testing.T) {
@@ -140,6 +144,44 @@ func TestMicCommandDoesNotCaptureTheSystemMonitor(t *testing.T) {
 	}
 	if args[len(args)-1] != "-" {
 		t.Fatalf("voice command output = %q, want stdout", args[len(args)-1])
+	}
+}
+
+func TestTriggerProfileUsesMinimalPromptAndGreedyDecode(t *testing.T) {
+	root := t.TempDir()
+	modelsPath := filepath.Join(root, "models.toml")
+	modelsText := `[models.trigger]
+engine = "whisper.cpp"
+model = "base.en"
+language = "en"
+command = "whisper-cli -f {audio} -bs 5 --best-of=5"
+prompt = "Names and terms: Abdullah, coEngen, Singular Machines, Culham, Adrian, James, Will, Flic, Claude, Claude Code, Codex, ChatGPT, Emacs, Temporal, divertor. Plainer, shorter."
+`
+	if err := os.WriteFile(modelsPath, []byte(modelsText), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	profile, err := triggerProfile(config.Config{
+		ModelsPath:          modelsPath,
+		VoiceTriggerProfile: "trigger",
+		VoiceStartWord:      "quasar",
+		VoiceStopWord:       "marzipan",
+		VoiceSendWord:       "tangerine",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if profile.Prompt != "Trigger words: quasar, marzipan, tangerine." {
+		t.Fatalf("trigger prompt = %q", profile.Prompt)
+	}
+	if strings.Contains(profile.Prompt, "Abdullah") {
+		t.Fatalf("dictation prompt leaked into trigger prompt: %q", profile.Prompt)
+	}
+	if strings.Contains(profile.Command, "-bs 5") || strings.Contains(profile.Command, "--best-of=5") {
+		t.Fatalf("dictation decode settings survived: %q", profile.Command)
+	}
+	if !strings.Contains(profile.Command, "-bs 1") || !strings.Contains(profile.Command, "-bo 1") {
+		t.Fatalf("greedy trigger decode settings missing: %q", profile.Command)
 	}
 }
 

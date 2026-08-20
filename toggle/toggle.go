@@ -158,7 +158,12 @@ func finishSession(cfg config.Config, metadata *session.Metadata, request finish
 	title := "📝 Transcribing speech"
 	body := "Using " + profile.ID + "."
 	desktop.Notify(cfg, title, body)
-	desktop.Play(cfg, "transcription_start")
+	// The start sound is useful feedback, but waiting for it here puts a
+	// multi-second theme sample between stopping the recording and the
+	// transcript reaching the clipboard. Start it now and wait only at the
+	// lifecycle boundary, after the pipeline has completed.
+	transcriptionSound := desktop.PlayAsync(cfg, "transcription_start")
+	defer transcriptionSound.Wait()
 	stopHeartbeat := make(chan struct{})
 	go heartbeat(cfg, title, body, stopHeartbeat)
 	transcript, err := transcription.Transcribe(
