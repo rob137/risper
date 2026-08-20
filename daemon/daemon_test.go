@@ -154,8 +154,8 @@ func TestGesturesReachTheToggleCommand(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	go func() {
 		trigger := <-triggers
-		trigger(hotkeys.GestureToggle)
-		trigger(hotkeys.GestureTogglePaste)
+		trigger(hotkeys.GestureDoubleAlt)
+		trigger(hotkeys.GestureShiftDoubleAlt)
 		time.Sleep(200 * time.Millisecond)
 		cancel()
 	}()
@@ -177,7 +177,7 @@ func TestGesturesReachTheToggleCommand(t *testing.T) {
 	}
 	lines := strings.Split(strings.TrimSpace(string(data)), "\n")
 	sort.Strings(lines)
-	want := []string{"[--paste --enter]", "[]"}
+	want := []string{"[--paste --enter]", "[--paste]"}
 	if len(lines) != len(want) || lines[0] != want[0] || lines[1] != want[1] {
 		t.Fatalf("toggle invocations = %#v, want %#v", lines, want)
 	}

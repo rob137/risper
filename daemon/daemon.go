@@ -168,14 +168,20 @@ func pruneAudio(cfg config.Config) {
 	}
 }
 
-// toggleArgs maps a gesture onto the toggle command surface. Shift double Alt
-// asks the finishing run to paste and submit, so the transcript lands where the
-// cursor is instead of only on the clipboard.
+// toggleArgs maps a gesture onto the toggle command surface. Both gestures
+// paste, because a transcript that only reaches the clipboard still needs a
+// keystroke to be useful; Shift adds the Return that submits it. Running
+// risper-toggle with no arguments stays clipboard-only, which is the escape
+// hatch for anywhere the configured paste keys do not work.
 func toggleArgs(gesture hotkeys.Gesture) []string {
-	if gesture == hotkeys.GestureTogglePaste {
+	switch gesture {
+	case hotkeys.GestureShiftDoubleAlt:
 		return []string{"--paste", "--enter"}
+	case hotkeys.GestureDoubleAlt:
+		return []string{"--paste"}
+	default:
+		return nil
 	}
-	return nil
 }
 
 func startToggle(cfg config.Config, options Options, gesture hotkeys.Gesture) {

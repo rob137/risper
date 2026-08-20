@@ -23,7 +23,7 @@ func TestDoubleAltUsesKernelTimestampsAndDeviceLocalState(t *testing.T) {
 	// window. A key held on another device must not pollute this device.
 	detector.HandleKey("ydotoold", 30, true, 50*time.Millisecond)
 	detector.HandleKey("ydotoold", 30, false, 60*time.Millisecond)
-	if tap(t, detector, "keyboard", LeftAlt, 100*time.Millisecond) != GestureToggle {
+	if tap(t, detector, "keyboard", LeftAlt, 100*time.Millisecond) != GestureDoubleAlt {
 		t.Fatal("second tap did not trigger from kernel timestamps")
 	}
 }
@@ -36,7 +36,7 @@ func TestDoubleAltResetsLostReleaseAfterDeviceReset(t *testing.T) {
 	if tap(t, detector, "keyboard", LeftAlt, time.Second) != GestureNone {
 		t.Fatal("first tap after device reset triggered")
 	}
-	if tap(t, detector, "keyboard", LeftAlt, 1100*time.Millisecond) != GestureToggle {
+	if tap(t, detector, "keyboard", LeftAlt, 1100*time.Millisecond) != GestureDoubleAlt {
 		t.Fatal("listener did not recover after a lost release")
 	}
 }
@@ -74,7 +74,7 @@ func TestShiftDoubleAltRequestsPaste(t *testing.T) {
 	if shiftTap(t, detector, "keyboard", LeftAlt, 0) != GestureNone {
 		t.Fatal("first shift tap triggered")
 	}
-	if shiftTap(t, detector, "keyboard", LeftAlt, 100*time.Millisecond) != GestureTogglePaste {
+	if shiftTap(t, detector, "keyboard", LeftAlt, 100*time.Millisecond) != GestureShiftDoubleAlt {
 		t.Fatal("second shift tap did not request paste")
 	}
 }
@@ -88,7 +88,7 @@ func TestShiftHeldAcrossBothTapsWithoutRelease(t *testing.T) {
 	}
 	detector.HandleKey("keyboard", LeftAlt, true, 100*time.Millisecond)
 	gesture, diagnostic := detector.HandleKey("keyboard", LeftAlt, false, 110*time.Millisecond)
-	if gesture != GestureTogglePaste {
+	if gesture != GestureShiftDoubleAlt {
 		t.Fatalf("gesture = %v diagnostic = %q", gesture, diagnostic)
 	}
 }
@@ -103,7 +103,7 @@ func TestShiftChangingBetweenTapsDoesNotTrigger(t *testing.T) {
 	}
 	// The mismatched tap becomes the new first tap, so the gesture is still
 	// reachable without waiting out the window.
-	if shiftTap(t, detector, "keyboard", LeftAlt, 200*time.Millisecond) != GestureTogglePaste {
+	if shiftTap(t, detector, "keyboard", LeftAlt, 200*time.Millisecond) != GestureShiftDoubleAlt {
 		t.Fatal("shift taps did not recover after a mismatch")
 	}
 }
@@ -138,7 +138,7 @@ func TestShiftDoubleAltSurvivesAQuietKeyboard(t *testing.T) {
 		detector.HandleKey("keyboard", LeftAlt, true, quiet+105*time.Millisecond)
 		return detector.HandleKey("keyboard", LeftAlt, false, quiet+110*time.Millisecond)
 	}()
-	if gesture != GestureTogglePaste {
+	if gesture != GestureShiftDoubleAlt {
 		t.Fatalf("gesture after a quiet keyboard = %v (%s), want paste", gesture, diagnostic)
 	}
 }

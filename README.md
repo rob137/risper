@@ -7,7 +7,7 @@ The Go rewrite is complete. Go owns recording, mixing, local transcription, clip
 ## Commands
 
 - `risper`: enables autostart and starts the user daemon. `risper kill` stops it temporarily.
-- `risper toggle`: starts recording, stops it on the next run, or cancels an active transcription. Transcription includes the microphone and computer-output capture.
+- `risper toggle`: starts recording, stops it on the next run, or cancels an active transcription. Transcription includes the microphone and computer-output capture. `--paste` replays `paste_keys` into the focused window afterwards, and `--paste --enter` follows it with Return.
 - `risper history`: lists recent sessions and opens, plays, copies, retranscribes, deletes, or prunes them.
 - `risper open`: opens recordings, the last session, the last transcript, the last audio file, or the config.
 - `risper retranscribe`: retranscribes a saved session from its mixed audio.
@@ -173,11 +173,13 @@ Both sources are captured and included for every recording; the ordinary `risper
 
 Double Alt is an optional Linux input-event listener in `risper-daemon`, disabled by default. It needs read access to `/dev/input/event*`; see `docs/double-alt.md`.
 
-Holding Shift across both Alt taps runs `risper-toggle --paste --enter`, which replays `paste_keys` and then Return into the focused window once the transcript is copied. That needs `ydotoold`, and the target is whatever has focus when transcription finishes, not when the gesture was made.
+Double Alt runs `risper-toggle --paste`, which replays `paste_keys` into the focused window once the transcript is copied. Holding Shift across both taps runs `risper-toggle --paste --enter`, which follows the paste with Return. Both need `ydotoold`, and the target is whatever has focus when transcription finishes, not when the gesture was made.
+
+Plain `risper-toggle` still only copies, so the GNOME custom shortcut remains the clipboard-only path.
 
 ## Environment
 
-Risper targets Rob's Ubuntu/GNOME/Wayland setup. The Linux integration uses `pw-record`, `ffmpeg`, `wl-copy`, `notify-send`, `canberra-gtk-play`, `gio`, and `ydotool` for the opt-in paste. A standalone tray/status window is deliberately outside the default workflow. Automatic paste is opt-in per run through `--paste`, and completed transcripts remain on the clipboard whether or not the paste lands.
+Risper targets Rob's Ubuntu/GNOME/Wayland setup. The Linux integration uses `pw-record`, `ffmpeg`, `wl-copy`, `notify-send`, `canberra-gtk-play`, `gio`, and `ydotool` for the opt-in paste. A standalone tray/status window is deliberately outside the default workflow. Automatic paste is per-run through `--paste`, which the Double Alt gestures pass; completed transcripts remain on the clipboard whether or not the paste lands.
 
 ## Uninstall
 

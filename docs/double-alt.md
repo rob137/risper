@@ -8,24 +8,29 @@ Current implementation:
 - `risper-daemon` can optionally start a Linux `/dev/input/event*` listener.
 - It is disabled by default: set `double_alt_enabled = true` in `~/.config/risper/config.toml`.
 - It requires read access to input event devices, which normally needs explicit input-group or udev-rule setup.
-- It starts `risper-toggle` when a clean double Alt tap is detected.
+- It starts `risper-toggle --paste` when a clean double Alt tap is detected.
 - Holding Shift across both taps starts `risper-toggle --paste --enter` instead.
+- Plain `risper-toggle`, as bound to a GNOME custom shortcut, stays
+  clipboard-only. That is the escape hatch for anywhere the configured paste
+  keys do not work.
 
 Correct double Alt semantics:
 
 - Count only Alt press and release with no other key participating.
 - Shift is the one exception: held before both Alt presses, it selects the
-  paste variant rather than discarding the gesture.
+  submitting variant rather than discarding the gesture.
 - Ignore Alt+Tab, Alt+F4, menu shortcuts, and other combinations.
 - Use a configurable double-tap window, default 350 ms.
 - Do not swallow or remap Alt globally without explicit approval.
 
-## Shift double Alt
+## Pasting
 
-Shift double Alt finishes the recording and then replays a paste, followed by
-Return, into whatever window holds focus when transcription completes. That is
-usually seconds after the gesture, so the transcript lands wherever the cursor
-is *then*, not where it was when Rob stopped talking.
+Both gestures finish the recording and then replay a paste into whatever window
+holds focus when transcription completes. Shift double Alt follows it with
+Return, which submits. That is usually seconds after the gesture, so the
+transcript lands wherever the cursor is *then*, not where it was when Rob
+stopped talking. A stray double Alt therefore types into whatever is focused;
+only the Shift variant can send it.
 
 Injection goes through `ydotool`, which needs `ydotoold` running and write
 access to `/dev/uinput`:

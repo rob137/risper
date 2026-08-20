@@ -13,14 +13,15 @@ const (
 )
 
 // Gesture is the outcome of one key event. Shift is the only modifier allowed
-// to join the two Alt taps, and it selects the paste variant rather than
-// discarding the gesture as a combination.
+// to join the two Alt taps, and it distinguishes the two gestures rather than
+// discarding the second as a combination. What each one does is the daemon's
+// choice, not this package's.
 type Gesture int
 
 const (
 	GestureNone Gesture = iota
-	GestureToggle
-	GestureTogglePaste
+	GestureDoubleAlt
+	GestureShiftDoubleAlt
 )
 
 type deviceState struct {
@@ -184,9 +185,9 @@ func (detector *Detector) HandleKey(device string, key uint16, pressed bool, tim
 	}
 	state.hasLastTap = false
 	if tapShift {
-		return GestureTogglePaste, "shift double-alt triggered"
+		return GestureShiftDoubleAlt, "shift double-alt triggered"
 	}
-	return GestureToggle, "double-alt triggered"
+	return GestureDoubleAlt, "double-alt triggered"
 }
 
 func (detector *Detector) handleOtherRelease(device string, key uint16, timestamp time.Duration) (Gesture, string) {

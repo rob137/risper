@@ -109,14 +109,16 @@ risper-daemon
 
 The daemon should mark any still-`recording` sessions as `recovered`; stop the foreground daemon with Ctrl-C when the check is complete.
 
-Shift double Alt:
+Pasting:
 
 ```bash
+risper-toggle && sleep 2 && risper-toggle --paste
 risper-toggle && sleep 2 && risper-toggle --paste --enter
 ```
 
-Put the cursor in a text field before the second command. The transcript should
-appear there and be submitted. `paste_confirmation` in `metadata.json` records
+Put the cursor in a text field before the second command of each pair. The
+transcript should appear there, and be submitted in the `--enter` case. Double
+Alt sends `--paste`; Shift double Alt sends both. `paste_confirmation` in `metadata.json` records
 whether the helper ran; nothing can confirm the target accepted the keys.
 
 Still environment-limited:
