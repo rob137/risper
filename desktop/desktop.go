@@ -172,10 +172,12 @@ func Play(cfg config.Config, kind string) {
 		return
 	}
 	event, volume := sound(kind)
-	cmd := exec.Command("canberra-gtk-play", "-i", event, "-V", volume, "-d", "Risper "+kind)
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "canberra-gtk-play", "-i", event, "-V", volume, "-d", "Risper "+kind)
 	cmd.Stdout = io.Discard
 	cmd.Stderr = io.Discard
-	_ = cmd.Start()
+	_ = cmd.Run()
 }
 
 func sound(kind string) (string, string) {
