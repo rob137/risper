@@ -58,7 +58,7 @@ Expected:
 - `audio.wav` is playable.
 - Metadata becomes `complete` after successful transcription and clipboard copy.
 - `transcript.raw.txt` and `transcript.clean.txt` are created.
-- `events.jsonl` records recorder, transcription, clipboard, and skipped-paste boundaries without transcript text.
+- `events.jsonl` records recorder, transcription, clipboard, and paste boundaries without transcript text.
 - Audio remains available if transcription fails.
 - Recording-start, transcription-start, success/error notifications and sounds are attempted; stopping moves directly into transcription rather than showing a separate stop notification.
 - A transcription-start notification appears after stopping recording.
@@ -95,7 +95,7 @@ risper diagnose last
 risper-paste-test
 ```
 
-The `risper-*` commands in `~/.local/bin` are compatibility wrappers over the matching Go subcommands. `risper-status` reports `risper.service` status; it does not open a GTK status window. `risper-paste-test` copies a marker to the clipboard for a manual check; it does not run the old paste experiment, and automatic paste is not part of normal dictation.
+The `risper-*` commands in `~/.local/bin` are compatibility wrappers over the matching Go subcommands. `risper-status` reports `risper.service` status; it does not open a GTK status window. `risper-paste-test` copies a marker to the clipboard for a manual check. Automatic paste happens only when a run is given `--paste`, which Shift double Alt does.
 
 ## Daemon recovery smoke test
 
@@ -109,8 +109,18 @@ risper-daemon
 
 The daemon should mark any still-`recording` sessions as `recovered`; stop the foreground daemon with Ctrl-C when the check is complete.
 
+Shift double Alt:
+
+```bash
+risper-toggle && sleep 2 && risper-toggle --paste --enter
+```
+
+Put the cursor in a text field before the second command. The transcript should
+appear there and be submitted. `paste_confirmation` in `metadata.json` records
+whether the helper ran; nothing can confirm the target accepted the keys.
+
 Still environment-limited:
 
-- Automatic paste into arbitrary Wayland apps.
+- Confirming a paste actually reached the focused window.
 - A standalone tray indicator or recording window. Notifications and the GNOME microphone indicator are the current feedback path.
 - Double Alt unless `double_alt_enabled = true` and the daemon can read `/dev/input/event*`.

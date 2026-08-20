@@ -20,9 +20,28 @@ import (
 
 const version = "0.1.0"
 
+const (
+	// pasteSettleMS lets the window that gained focus during transcription
+	// finish drawing before the paste shortcut arrives.
+	pasteSettleMS = 150
+	// returnSettleMS gives the target time to accept the pasted text, because
+	// Return arriving first submits an empty field.
+	returnSettleMS = 300
+)
+
+// finish says what should happen once the transcript reaches the clipboard. It
+// only applies to the run that stops a recording; the run that starts one has
+// no transcript to place.
+type finish struct {
+	paste bool
+	enter bool
+}
+
 func Main(args []string) int {
 	parser := flag.NewFlagSet("risper-toggle", flag.ContinueOnError)
 	parser.SetOutput(os.Stderr)
+	paste := parser.Bool("paste", false, "replay a paste into the focused window once the transcript is copied")
+	enter := parser.Bool("enter", false, "press Return after pasting")
 	if err := parser.Parse(args); err != nil {
 		return 2
 	}
@@ -30,6 +49,11 @@ func Main(args []string) int {
 		fmt.Fprintln(os.Stderr, "risper-toggle: unexpected positional argument")
 		return 2
 	}
+	if *enter && !*paste {
+		fmt.Fprintln(os.Stderr, "risper-toggle: --enter needs --paste")
+		return 2
+	}
+	request := finish{paste: *paste, enter: *enter}
 
 	cfg, err := config.Load()
 	if err != nil {
@@ -53,7 +77,7 @@ func Main(args []string) int {
 		if stopErr != nil {
 			return fail(cfg, stopErr)
 		}
-		return finishSession(cfg, metadata)
+		return finishSession(cfg, metadata, request)
 	}
 
 	state, err := recording.Start(cfg)
@@ -78,7 +102,7 @@ func fail(cfg config.Config, err error) int {
 	return 1
 }
 
-func finishSession(cfg config.Config, metadata *session.Metadata) int {
+func finishSession(cfg config.Config, metadata *session.Metadata, request finish) int {
 	if metadata == nil {
 		return fail(cfg, errors.New("recording returned no session metadata"))
 	}
@@ -148,23 +172,62 @@ func finishSession(cfg config.Config, metadata *session.Metadata) int {
 	if !copied {
 		return transcriptionFailure(cfg, metadata, errors.New(clipboardMessage))
 	}
-	appendLog(filepath.Join(session.SessionDir(metadata), session.StatusLogFile), "automatic paste skipped; transcript left on clipboard")
-	_, _ = events.Append(session.SessionDir(metadata), "paste.skipped", map[string]any{
-		"reason": "automatic_paste_disabled", "session_type": metadata.SessionType,
-	})
+	pasted, pasteMessage, confirmation := placeTranscript(cfg, request)
+	appendLog(filepath.Join(session.SessionDir(metadata), session.StatusLogFile), pasteMessage)
+	if request.paste {
+		_, _ = events.Append(session.SessionDir(metadata), "paste.result", map[string]any{
+			"ok": pasted, "enter": request.enter, "keys": cfg.PasteKeys,
+			"message": pasteMessage, "confirmation": confirmation,
+			"session_type": metadata.SessionType,
+		})
+	} else {
+		_, _ = events.Append(session.SessionDir(metadata), "paste.skipped", map[string]any{
+			"reason": "automatic_paste_disabled", "session_type": metadata.SessionType,
+		})
+	}
+	attempted := request.paste
 	falseValue := false
 	metadata.Status = "complete"
 	metadata.Errors = []string{}
-	metadata.PasteAttempted = &falseValue
-	metadata.PasteHelperSucceeded = &falseValue
+	metadata.PasteAttempted = &attempted
+	metadata.PasteHelperSucceeded = &pasted
+	// The clipboard is the only outcome Risper can observe. Whether the target
+	// window took the keys is never confirmed, so paste_succeeded stays false.
 	metadata.PasteSucceeded = &falseValue
-	metadata.PasteConfirmation = "not_attempted_automatic_paste_disabled"
+	metadata.PasteConfirmation = confirmation
 	if err := session.SaveMetadata(metadata); err != nil {
 		return fail(cfg, err)
 	}
-	desktop.Notify(cfg, "✅ Risper copied", "Transcript is on the clipboard.")
+	if request.paste && pasted {
+		desktop.Notify(cfg, "✅ Risper pasted", "Sent to the focused window; transcript is on the clipboard.")
+	} else if request.paste {
+		desktop.Notify(cfg, "✅ Risper copied", "Paste unavailable; transcript is on the clipboard.")
+	} else {
+		desktop.Notify(cfg, "✅ Risper copied", "Transcript is on the clipboard.")
+	}
 	desktop.Play(cfg, "success")
 	return 0
+}
+
+// placeTranscript replays the paste shortcut, and then Return, into whatever
+// window holds focus. Each ydotool call waits before pressing, which also
+// gives the target time to accept the paste before Return arrives.
+func placeTranscript(cfg config.Config, request finish) (bool, string, string) {
+	if !request.paste {
+		return false, "automatic paste skipped; transcript left on clipboard", "not_attempted_automatic_paste_disabled"
+	}
+	pasted, message := desktop.SendKeys(cfg.PasteKeys, pasteSettleMS)
+	if !pasted {
+		return false, message, "not_pasted_clipboard_retained"
+	}
+	if !request.enter {
+		return true, message, "helper_ran_target_unverified"
+	}
+	sent, enterMessage := desktop.SendKeys("enter", returnSettleMS)
+	if !sent {
+		return true, message + "; " + enterMessage, "pasted_but_return_not_sent"
+	}
+	return true, message + "; " + enterMessage, "helper_ran_target_unverified"
 }
 
 func heartbeat(cfg config.Config, title, body string, stop <-chan struct{}) {

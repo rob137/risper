@@ -11,7 +11,11 @@ import (
 	"github.com/rob137/risper/session"
 )
 
-func TestToggleRunsRealRecordMixTranscribeClipboardCycle(t *testing.T) {
+// stubEnvironment installs fake desktop and engine commands on PATH and
+// isolates every XDG root, so a toggle run exercises the real code path
+// without touching Rob's sessions.
+func stubEnvironment(t *testing.T) (string, config.Config) {
+	t.Helper()
 	root := t.TempDir()
 	bin := filepath.Join(root, "bin")
 	if err := os.Mkdir(bin, 0o755); err != nil {
@@ -60,6 +64,10 @@ printf '42\n'
 		"canberra-gtk-play": `#!/bin/sh
 printf '%s\n' "$*" >> "$SOUND_LOG"
 `,
+		"ydotool": `#!/bin/sh
+printf '%s\n' "$*" >> "$YDOTOOL_LOG"
+exit "${YDOTOOL_EXIT:-0}"
+`,
 	} {
 		writeExecutable(t, filepath.Join(bin, name), body)
 	}
@@ -80,6 +88,7 @@ printf '%s\n' "$*" >> "$SOUND_LOG"
 		"CLIPBOARD_PATH":   clipboard,
 		"NOTIFY_LOG":       filepath.Join(root, "notify.log"),
 		"SOUND_LOG":        filepath.Join(root, "sound.log"),
+		"YDOTOOL_LOG":      filepath.Join(root, "ydotool.log"),
 	} {
 		t.Setenv(key, value)
 	}
@@ -113,6 +122,12 @@ prompt = "Names and terms: Abdullah, coEngen, Singular Machines, Culham, Adrian,
 	if err != nil {
 		t.Fatal(err)
 	}
+	return root, cfg
+}
+
+func TestToggleRunsRealRecordMixTranscribeClipboardCycle(t *testing.T) {
+	root, cfg := stubEnvironment(t)
+	clipboard := filepath.Join(root, "clipboard.txt")
 
 	if code := Main(nil); code != 0 {
 		t.Fatalf("start returned %d", code)
@@ -212,6 +227,70 @@ prompt = "Names and terms: Abdullah, coEngen, Singular Machines, Culham, Adrian,
 				t.Fatalf("session %s missing event %s: %#v", metadata.SessionID, required, records)
 			}
 		}
+	}
+}
+
+func TestTogglePastesAndSubmitsWhenAsked(t *testing.T) {
+	root, cfg := stubEnvironment(t)
+	if code := Main(nil); code != 0 {
+		t.Fatalf("start returned %d", code)
+	}
+	if code := Main([]string{"--paste", "--enter"}); code != 0 {
+		t.Fatalf("paste stop returned %d", code)
+	}
+	if got := readFile(t, filepath.Join(root, "ydotool.log")); got != "key --delay 150 ctrl+v\nkey --delay 300 enter\n" {
+		t.Fatalf("ydotool log = %q", got)
+	}
+	last, err := session.Last(cfg)
+	if err != nil || last == nil {
+		t.Fatalf("session = %#v, %v", last, err)
+	}
+	if last.Status != "complete" {
+		t.Fatalf("status = %q errors=%v", last.Status, last.Errors)
+	}
+	if last.PasteAttempted == nil || !*last.PasteAttempted {
+		t.Fatalf("paste_attempted = %#v", last.PasteAttempted)
+	}
+	if last.PasteHelperSucceeded == nil || !*last.PasteHelperSucceeded {
+		t.Fatalf("paste_helper_succeeded = %#v", last.PasteHelperSucceeded)
+	}
+	// Risper cannot see the target window accept the keys, so the stronger
+	// claim stays false however well the helper ran.
+	if last.PasteSucceeded == nil || *last.PasteSucceeded {
+		t.Fatalf("paste_succeeded = %#v", last.PasteSucceeded)
+	}
+	if last.PasteConfirmation != "helper_ran_target_unverified" {
+		t.Fatalf("paste_confirmation = %q", last.PasteConfirmation)
+	}
+}
+
+func TestToggleKeepsTranscriptWhenPasteHelperFails(t *testing.T) {
+	root, cfg := stubEnvironment(t)
+	t.Setenv("YDOTOOL_EXIT", "1")
+	if code := Main(nil); code != 0 {
+		t.Fatalf("start returned %d", code)
+	}
+	if code := Main([]string{"--paste", "--enter"}); code != 0 {
+		t.Fatalf("failed paste turned a saved transcript into exit %d", code)
+	}
+	if got := strings.TrimSpace(readFile(t, filepath.Join(root, "clipboard.txt"))); got != "phase two transcript" {
+		t.Fatalf("clipboard = %q", got)
+	}
+	if got := readFile(t, filepath.Join(root, "ydotool.log")); strings.Contains(got, "enter") {
+		t.Fatalf("Return was sent after the paste failed: %q", got)
+	}
+	last, err := session.Last(cfg)
+	if err != nil || last == nil {
+		t.Fatalf("session = %#v, %v", last, err)
+	}
+	if last.Status != "complete" || last.PasteConfirmation != "not_pasted_clipboard_retained" {
+		t.Fatalf("status = %q confirmation = %q", last.Status, last.PasteConfirmation)
+	}
+}
+
+func TestToggleRejectsEnterWithoutPaste(t *testing.T) {
+	if code := Main([]string{"--enter"}); code != 2 {
+		t.Fatalf("--enter alone returned %d, want usage error 2", code)
 	}
 }
 

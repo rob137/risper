@@ -5,11 +5,13 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/rob137/risper/config"
+	"github.com/rob137/risper/hotkeys"
 	"github.com/rob137/risper/platforms"
 	"github.com/rob137/risper/session"
 )
@@ -126,7 +128,7 @@ func TestRunStartsAndStopsConfiguredListener(t *testing.T) {
 		cancel()
 	}()
 	if err := RunWithOptions(ctx, cfg, Options{
-		ListenerFactory: func(int, func()) platforms.DoubleAltListener { return factory },
+		ListenerFactory: func(int, func(hotkeys.Gesture)) platforms.DoubleAltListener { return factory },
 		Notify:          func(config.Config, string, string) {},
 		RetryInterval:   time.Millisecond,
 	}); err != nil {
@@ -134,6 +136,50 @@ func TestRunStartsAndStopsConfiguredListener(t *testing.T) {
 	}
 	if !listener.started || !listener.stopped {
 		t.Fatalf("listener lifecycle started=%v stopped=%v", listener.started, listener.stopped)
+	}
+}
+
+func TestGesturesReachTheToggleCommand(t *testing.T) {
+	cfg := daemonConfig(t)
+	cfg.DoubleAltEnabled = true
+	bin := t.TempDir()
+	argsLog := filepath.Join(bin, "args.log")
+	script := "#!/bin/sh\nprintf '[%s]\\n' \"$*\" >> " + argsLog + "\n"
+	toggle := filepath.Join(bin, "risper-toggle")
+	if err := os.WriteFile(toggle, []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	triggers := make(chan func(hotkeys.Gesture), 1)
+	ctx, cancel := context.WithCancel(context.Background())
+	go func() {
+		trigger := <-triggers
+		trigger(hotkeys.GestureToggle)
+		trigger(hotkeys.GestureTogglePaste)
+		time.Sleep(200 * time.Millisecond)
+		cancel()
+	}()
+	if err := RunWithOptions(ctx, cfg, Options{
+		ListenerFactory: func(_ int, onTrigger func(hotkeys.Gesture)) platforms.DoubleAltListener {
+			triggers <- onTrigger
+			return &fakeListener{}
+		},
+		Notify:        func(config.Config, string, string) {},
+		ToggleCommand: toggle,
+		RetryInterval: time.Millisecond,
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	data, err := os.ReadFile(argsLog)
+	if err != nil {
+		t.Fatal(err)
+	}
+	lines := strings.Split(strings.TrimSpace(string(data)), "\n")
+	sort.Strings(lines)
+	want := []string{"[--paste --enter]", "[]"}
+	if len(lines) != len(want) || lines[0] != want[0] || lines[1] != want[1] {
+		t.Fatalf("toggle invocations = %#v, want %#v", lines, want)
 	}
 }
 

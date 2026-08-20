@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -46,6 +47,32 @@ func CopyText(text string) (bool, string) {
 		}
 	}
 	return false, "no clipboard command available"
+}
+
+// SendKeys replays one ydotool key sequence, such as "ctrl+v" or "enter",
+// into whichever window holds focus. delayMS is how long ydotool waits before
+// pressing, which is the only lever for letting the target settle. ydotool
+// 0.1.8 exits zero for sequences it does not recognise, so a true result means
+// the helper ran rather than that the target accepted the keys.
+func SendKeys(sequence string, delayMS int) (bool, string) {
+	if sequence == "" {
+		return false, "no key sequence given"
+	}
+	if !config.CommandExists("ydotool") {
+		return false, "ydotool is not installed"
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	args := []string{"key", "--delay", strconv.Itoa(delayMS), sequence}
+	output, err := exec.CommandContext(ctx, "ydotool", args...).CombinedOutput()
+	if err != nil {
+		detail := strings.TrimSpace(string(output))
+		if detail == "" {
+			detail = err.Error()
+		}
+		return false, "ydotool key " + sequence + " failed: " + detail
+	}
+	return true, "sent " + sequence + " with ydotool"
 }
 
 // OpenPath asks the desktop to open a file or directory with its default

@@ -71,7 +71,7 @@ type deviceMessage struct {
 
 type LinuxDoubleAltListener struct {
 	window       time.Duration
-	onTrigger    func()
+	onTrigger    func(hotkeys.Gesture)
 	onLog        func(string)
 	devicePaths  []string
 	stop         chan struct{}
@@ -85,17 +85,17 @@ type LinuxDoubleAltListener struct {
 // NewLinuxDoubleAltListener creates a listener over the current
 // /dev/input/event* set. The listener refreshes that set while running, so an
 // unplug/replug or suspend/resume does not require a daemon restart.
-func NewLinuxDoubleAltListener(windowMS int, onTrigger func()) *LinuxDoubleAltListener {
+func NewLinuxDoubleAltListener(windowMS int, onTrigger func(hotkeys.Gesture)) *LinuxDoubleAltListener {
 	return newLinuxDoubleAltListener(windowMS, onTrigger, nil)
 }
 
 // NewLinuxDoubleAltListenerForPaths is the path-explicit form used by tests.
 // It is also useful for a narrowly-scoped diagnostic fixture.
-func NewLinuxDoubleAltListenerForPaths(windowMS int, onTrigger func(), paths []string) *LinuxDoubleAltListener {
+func NewLinuxDoubleAltListenerForPaths(windowMS int, onTrigger func(hotkeys.Gesture), paths []string) *LinuxDoubleAltListener {
 	return newLinuxDoubleAltListener(windowMS, onTrigger, paths)
 }
 
-func newLinuxDoubleAltListener(windowMS int, onTrigger func(), paths []string) *LinuxDoubleAltListener {
+func newLinuxDoubleAltListener(windowMS int, onTrigger func(hotkeys.Gesture), paths []string) *LinuxDoubleAltListener {
 	if windowMS < 100 {
 		windowMS = 100
 	}
@@ -217,7 +217,7 @@ func (listener *LinuxDoubleAltListener) run() {
 			return
 		case message := <-messages:
 			if message.event != nil {
-				triggered, diagnostic := detector.HandleKey(
+				gesture, diagnostic := detector.HandleKey(
 					message.path,
 					message.event.Code,
 					message.event.Value == KeyPress,
@@ -226,8 +226,8 @@ func (listener *LinuxDoubleAltListener) run() {
 				if diagnostic != "" {
 					listener.log(diagnostic)
 				}
-				if triggered && listener.onTrigger != nil {
-					go listener.onTrigger()
+				if gesture != hotkeys.GestureNone && listener.onTrigger != nil {
+					go listener.onTrigger(gesture)
 				}
 			}
 			if message.err != nil {

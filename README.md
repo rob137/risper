@@ -84,6 +84,7 @@ paste_mode = "clipboard_only"
 play_sounds = true
 double_alt_enabled = false
 double_alt_window_ms = 350
+paste_keys = "ctrl+v"
 audio_retention = "never" # never | <count>h | <count>d | <count>w
 ```
 
@@ -172,9 +173,11 @@ Both sources are captured and included for every recording; the ordinary `risper
 
 Double Alt is an optional Linux input-event listener in `risper-daemon`, disabled by default. It needs read access to `/dev/input/event*`; see `docs/double-alt.md`.
 
+Holding Shift across both Alt taps runs `risper-toggle --paste --enter`, which replays `paste_keys` and then Return into the focused window once the transcript is copied. That needs `ydotoold`, and the target is whatever has focus when transcription finishes, not when the gesture was made.
+
 ## Environment
 
-Risper targets Rob's Ubuntu/GNOME/Wayland setup. The Linux integration uses `pw-record`, `ffmpeg`, `wl-copy`, `notify-send`, `canberra-gtk-play`, and `gio`. Automatic paste into arbitrary Wayland apps and a standalone tray/status window are deliberately outside the default workflow; completed transcripts remain on the clipboard.
+Risper targets Rob's Ubuntu/GNOME/Wayland setup. The Linux integration uses `pw-record`, `ffmpeg`, `wl-copy`, `notify-send`, `canberra-gtk-play`, `gio`, and `ydotool` for the opt-in paste. A standalone tray/status window is deliberately outside the default workflow. Automatic paste is opt-in per run through `--paste`, and completed transcripts remain on the clipboard whether or not the paste lands.
 
 ## Uninstall
 

@@ -10,11 +10,13 @@ import (
 	"os/exec"
 	"os/signal"
 	"path/filepath"
+	"strings"
 	"syscall"
 	"time"
 
 	"github.com/rob137/risper/config"
 	"github.com/rob137/risper/desktop"
+	"github.com/rob137/risper/hotkeys"
 	"github.com/rob137/risper/platforms"
 	"github.com/rob137/risper/recording"
 	"github.com/rob137/risper/session"
@@ -26,7 +28,7 @@ const (
 )
 
 type Options struct {
-	ListenerFactory func(windowMS int, onTrigger func()) platforms.DoubleAltListener
+	ListenerFactory func(windowMS int, onTrigger func(hotkeys.Gesture)) platforms.DoubleAltListener
 	Notify          func(config.Config, string, string)
 	ToggleCommand   string
 	PruneInterval   time.Duration
@@ -35,7 +37,7 @@ type Options struct {
 
 func (options Options) withDefaults() Options {
 	if options.ListenerFactory == nil {
-		options.ListenerFactory = func(windowMS int, onTrigger func()) platforms.DoubleAltListener {
+		options.ListenerFactory = func(windowMS int, onTrigger func(hotkeys.Gesture)) platforms.DoubleAltListener {
 			return platforms.NewLinuxDoubleAltListener(windowMS, onTrigger)
 		}
 	}
@@ -101,7 +103,9 @@ func RunWithOptions(ctx context.Context, cfg config.Config, rawOptions Options) 
 		if !cfg.DoubleAltEnabled || !platforms.IsLinux() || listener != nil {
 			return
 		}
-		candidate := options.ListenerFactory(cfg.DoubleAltWindowMS, func() { startToggle(cfg, options) })
+		candidate := options.ListenerFactory(cfg.DoubleAltWindowMS, func(gesture hotkeys.Gesture) {
+			startToggle(cfg, options, gesture)
+		})
 		if candidate == nil {
 			appendLog(cfg.LogPath, "double-alt listener unavailable: factory returned no listener")
 			return
@@ -164,7 +168,17 @@ func pruneAudio(cfg config.Config) {
 	}
 }
 
-func startToggle(cfg config.Config, options Options) {
+// toggleArgs maps a gesture onto the toggle command surface. Shift double Alt
+// asks the finishing run to paste and submit, so the transcript lands where the
+// cursor is instead of only on the clipboard.
+func toggleArgs(gesture hotkeys.Gesture) []string {
+	if gesture == hotkeys.GestureTogglePaste {
+		return []string{"--paste", "--enter"}
+	}
+	return nil
+}
+
+func startToggle(cfg config.Config, options Options, gesture hotkeys.Gesture) {
 	command := options.ToggleCommand
 	path, err := exec.LookPath(command)
 	if err != nil {
@@ -180,14 +194,19 @@ func startToggle(cfg config.Config, options Options) {
 		appendLog(cfg.LogPath, "double-alt toggle unavailable: "+err.Error())
 		return
 	}
-	cmd := exec.Command(path)
+	args := toggleArgs(gesture)
+	cmd := exec.Command(path, args...)
 	cmd.Stdout = io.Discard
 	cmd.Stderr = io.Discard
 	if err := cmd.Start(); err != nil {
 		appendLog(cfg.LogPath, "double-alt toggle failed to start: "+err.Error())
 		return
 	}
-	appendLog(cfg.LogPath, "double-alt trigger")
+	if len(args) > 0 {
+		appendLog(cfg.LogPath, "double-alt trigger "+strings.Join(args, " "))
+	} else {
+		appendLog(cfg.LogPath, "double-alt trigger")
+	}
 	go func() { _ = cmd.Wait() }()
 }
 

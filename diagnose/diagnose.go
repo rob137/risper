@@ -188,6 +188,7 @@ func printEnvironment() int {
 		}
 	}
 	fmt.Printf("  paste mode          %s\n", cfg.PasteMode)
+	fmt.Printf("  paste keys          %s\n", cfg.PasteKeys)
 	if cfg.DoubleAltEnabled {
 		fmt.Println("  double Alt          enabled")
 	} else {

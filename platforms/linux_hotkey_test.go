@@ -6,6 +6,8 @@ import (
 	"syscall"
 	"testing"
 	"time"
+
+	"github.com/rob137/risper/hotkeys"
 )
 
 const testAlt uint16 = 56
@@ -37,7 +39,7 @@ func writeTap(t *testing.T, writer *os.File, at time.Duration) {
 func TestLinuxDoubleAltListenerStopsQuietDevice(t *testing.T) {
 	path, writer := makeFIFO(t)
 	defer writer.Close()
-	listener := NewLinuxDoubleAltListenerForPaths(350, func() {}, []string{path})
+	listener := NewLinuxDoubleAltListenerForPaths(350, func(hotkeys.Gesture) {}, []string{path})
 	if ok, message := listener.Start(); !ok {
 		t.Fatal(message)
 	}
@@ -47,8 +49,8 @@ func TestLinuxDoubleAltListenerStopsQuietDevice(t *testing.T) {
 func TestLinuxDoubleAltListenerTriggersFromKernelEvents(t *testing.T) {
 	path, writer := makeFIFO(t)
 	defer writer.Close()
-	triggered := make(chan struct{}, 1)
-	listener := NewLinuxDoubleAltListenerForPaths(350, func() { triggered <- struct{}{} }, []string{path})
+	triggered := make(chan hotkeys.Gesture, 1)
+	listener := NewLinuxDoubleAltListenerForPaths(350, func(gesture hotkeys.Gesture) { triggered <- gesture }, []string{path})
 	if ok, message := listener.Start(); !ok {
 		t.Fatal(message)
 	}
@@ -65,8 +67,8 @@ func TestLinuxDoubleAltListenerTriggersFromKernelEvents(t *testing.T) {
 
 func TestLinuxDoubleAltListenerReopensDeviceAfterReadFailure(t *testing.T) {
 	path, writer := makeFIFO(t)
-	triggered := make(chan struct{}, 1)
-	listener := NewLinuxDoubleAltListenerForPaths(350, func() { triggered <- struct{}{} }, []string{path})
+	triggered := make(chan hotkeys.Gesture, 1)
+	listener := NewLinuxDoubleAltListenerForPaths(350, func(gesture hotkeys.Gesture) { triggered <- gesture }, []string{path})
 	if ok, message := listener.Start(); !ok {
 		writer.Close()
 		t.Fatal(message)

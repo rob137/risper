@@ -26,6 +26,7 @@ transcription_command = ""
 model = "base.en"
 language = "en"
 paste_mode = "clipboard_only" # the transcript is always left on the clipboard
+paste_keys = "ctrl+v" # ydotool sequence used by shift double Alt; terminals usually want ctrl+shift+v
 play_sounds = true
 double_alt_enabled = false
 double_alt_window_ms = 350
@@ -33,6 +34,24 @@ audio_retention = "never" # never | <count>h | <count>d | <count>w; transcripts 
 `
 
 var allowedPasteModes = map[string]struct{}{"clipboard_only": {}}
+
+const defaultPasteKeys = "ctrl+v"
+
+// validPasteKeys keeps the configured sequence to the shape ydotool accepts,
+// so a typo cannot turn into an unexpected argument.
+func validPasteKeys(sequence string) bool {
+	if sequence == "" {
+		return false
+	}
+	for _, r := range sequence {
+		switch {
+		case r >= 'a' && r <= 'z', r >= 'A' && r <= 'Z', r >= '0' && r <= '9', r == '+', r == '_', r == '-':
+		default:
+			return false
+		}
+	}
+	return true
+}
 
 type Config struct {
 	ConfigPath               string
@@ -49,6 +68,7 @@ type Config struct {
 	Model                    string
 	Language                 string
 	PasteMode                string
+	PasteKeys                string
 	PlaySounds               bool
 	DoubleAltEnabled         bool
 	DoubleAltWindowMS        int
@@ -63,6 +83,7 @@ type rawConfig struct {
 	Model                string `toml:"model"`
 	Language             string `toml:"language"`
 	PasteMode            string `toml:"paste_mode"`
+	PasteKeys            string `toml:"paste_keys"`
 	PlaySounds           bool   `toml:"play_sounds"`
 	DoubleAltEnabled     bool   `toml:"double_alt_enabled"`
 	DoubleAltWindowMS    int    `toml:"double_alt_window_ms"`
@@ -179,6 +200,7 @@ func Load() (Config, error) {
 		Model:               "base.en",
 		Language:            "en",
 		PasteMode:           "clipboard_only",
+		PasteKeys:           defaultPasteKeys,
 		PlaySounds:          true,
 		DoubleAltWindowMS:   350,
 		AudioRetention:      "never",
@@ -194,6 +216,10 @@ func Load() (Config, error) {
 	pasteMode := raw.PasteMode
 	if _, ok := allowedPasteModes[pasteMode]; !ok {
 		pasteMode = "clipboard_only"
+	}
+	pasteKeys := raw.PasteKeys
+	if !validPasteKeys(pasteKeys) {
+		pasteKeys = defaultPasteKeys
 	}
 	window := raw.DoubleAltWindowMS
 	if window < 100 {
@@ -237,6 +263,7 @@ func Load() (Config, error) {
 		Model:                    raw.Model,
 		Language:                 raw.Language,
 		PasteMode:                pasteMode,
+		PasteKeys:                pasteKeys,
 		PlaySounds:               raw.PlaySounds,
 		DoubleAltEnabled:         raw.DoubleAltEnabled,
 		DoubleAltWindowMS:        window,
