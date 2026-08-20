@@ -42,6 +42,15 @@ The sequence is `paste_keys` in config, default `ctrl+v`. Terminals want
 `ctrl+shift+v`; there is one setting, so pick the one that matches where
 dictation usually lands.
 
+ydotool 0.1.8 does not validate key names and mis-parses the long ones: it
+turns `leftshift` into `KEY_L` and `f13` into `KEY_F`, exiting zero either way.
+Stick to the short aliases. `ctrl+v`, `ctrl+shift+v`, and `enter` were checked
+against the emitted keycodes; anything else needs the same check:
+
+```bash
+sudo evtest /dev/input/eventN   # the "ydotoold virtual device" node
+```
+
 Possible future approaches:
 
 - A packaged helper reading `/dev/input/event*`; this usually needs input group access or udev rules.
