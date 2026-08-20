@@ -121,3 +121,24 @@ func TestOtherModifiersStillDiscardTheGesture(t *testing.T) {
 		t.Fatal("ctrl held triggered the gesture")
 	}
 }
+
+func TestShiftDoubleAltSurvivesAQuietKeyboard(t *testing.T) {
+	detector := NewDetector(350 * time.Millisecond)
+	// Any earlier keystroke leaves lastEvent set, so the Shift press that
+	// starts the gesture arrives after the stale-input window has passed.
+	detector.HandleKey("keyboard", 30, true, 0)
+	detector.HandleKey("keyboard", 30, false, 10*time.Millisecond)
+
+	quiet := 10 * time.Second
+	if shiftTap(t, detector, "keyboard", LeftAlt, quiet) != GestureNone {
+		t.Fatal("first shift tap triggered")
+	}
+	gesture, diagnostic := func() (Gesture, string) {
+		detector.HandleKey("keyboard", LeftShift, true, quiet+100*time.Millisecond)
+		detector.HandleKey("keyboard", LeftAlt, true, quiet+105*time.Millisecond)
+		return detector.HandleKey("keyboard", LeftAlt, false, quiet+110*time.Millisecond)
+	}()
+	if gesture != GestureTogglePaste {
+		t.Fatalf("gesture after a quiet keyboard = %v (%s), want paste", gesture, diagnostic)
+	}
+}

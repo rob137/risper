@@ -119,10 +119,13 @@ func (detector *Detector) HandleKey(device string, key uint16, pressed bool, tim
 		reset(state)
 		state.hasLastTap = false
 		state.lastEvent = timestamp
-		if !pressed || !isAlt(key) {
+		if !pressed || (!isAlt(key) && !isShift(key)) {
 			return GestureNone, "double-alt state reset after stale input"
 		}
-		// Treat the current Alt press as the beginning of a new tap.
+		// An Alt press begins a new tap. A Shift press has to be recorded
+		// too: the reset just emptied keysDown, and holding Shift is normally
+		// the first thing to happen after a quiet keyboard, so returning here
+		// would drop the modifier that selects the paste variant.
 	}
 	state.lastEvent = timestamp
 
