@@ -16,6 +16,7 @@ import (
 	"github.com/rob137/risper/recording"
 	"github.com/rob137/risper/session"
 	"github.com/rob137/risper/transcription"
+	"github.com/rob137/risper/voice"
 )
 
 const version = "0.1.0"
@@ -33,8 +34,9 @@ const (
 // only applies to the run that stops a recording; the run that starts one has
 // no transcript to place.
 type finish struct {
-	paste bool
-	enter bool
+	paste       bool
+	enter       bool
+	triggerWord string
 }
 
 func Main(args []string) int {
@@ -42,6 +44,8 @@ func Main(args []string) int {
 	parser.SetOutput(os.Stderr)
 	paste := parser.Bool("paste", false, "replay a paste into the focused window once the transcript is copied")
 	enter := parser.Bool("enter", false, "press Return after pasting")
+	voiceStop := parser.Bool("voice-stop", false, "remove the configured voice stop word from the completed transcript")
+	voiceSend := parser.Bool("voice-send", false, "remove the configured voice send word from the completed transcript")
 	if err := parser.Parse(args); err != nil {
 		return 2
 	}
@@ -53,11 +57,20 @@ func Main(args []string) int {
 		fmt.Fprintln(os.Stderr, "risper-toggle: --enter needs --paste")
 		return 2
 	}
-	request := finish{paste: *paste, enter: *enter}
+	if *voiceStop && *voiceSend {
+		fmt.Fprintln(os.Stderr, "risper-toggle: --voice-stop and --voice-send are mutually exclusive")
+		return 2
+	}
 
 	cfg, err := config.Load()
 	if err != nil {
 		return fail(cfg, err)
+	}
+	request := finish{paste: *paste, enter: *enter}
+	if *voiceStop {
+		request.triggerWord = cfg.VoiceStopWord
+	} else if *voiceSend {
+		request.triggerWord = cfg.VoiceSendWord
 	}
 	if state, stateErr := transcription.Current(cfg); stateErr != nil {
 		return fail(cfg, stateErr)
@@ -159,9 +172,16 @@ func finishSession(cfg config.Config, metadata *session.Metadata, request finish
 	if err != nil {
 		return transcriptionFailure(cfg, metadata, err)
 	}
+	if request.triggerWord != "" {
+		transcript = voice.StripTrailingTrigger(transcript, request.triggerWord)
+		if err := transcription.WriteTranscript(metadata.TranscriptRawPath, metadata.TranscriptCleanPath, transcript); err != nil {
+			return transcriptionFailure(cfg, metadata, err)
+		}
+	}
 	_, _ = events.Append(session.SessionDir(metadata), "transcription.completed", map[string]any{
 		"raw_path": metadata.TranscriptRawPath, "clean_path": metadata.TranscriptCleanPath,
 		"transcript_chars": len([]rune(transcript)), "audio_source": audioSource,
+		"voice_trigger": request.triggerWord,
 	})
 
 	copied, clipboardMessage := desktop.CopyText(transcript)

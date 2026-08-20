@@ -52,7 +52,7 @@ while [ "$#" -gt 0 ]; do
   fi
   shift
 done
-printf 'phase two transcript\n' > "${output}.txt"
+printf '%s\n' "${WHISPER_TEXT:-phase two transcript}" > "${output}.txt"
 `,
 		"wl-copy": `#!/bin/sh
 cat > "$CLIPBOARD_PATH"
@@ -261,6 +261,40 @@ func TestTogglePastesAndSubmitsWhenAsked(t *testing.T) {
 	}
 	if last.PasteConfirmation != "helper_ran_target_unverified" {
 		t.Fatalf("paste_confirmation = %q", last.PasteConfirmation)
+	}
+}
+
+func TestToggleRemovesVoiceStopWordBeforePaste(t *testing.T) {
+	root, cfg := stubEnvironment(t)
+	t.Setenv("WHISPER_TEXT", "phase two transcript marzipan.")
+	if code := Main(nil); code != 0 {
+		t.Fatalf("start returned %d", code)
+	}
+	if code := Main([]string{"--paste", "--voice-stop"}); code != 0 {
+		t.Fatalf("voice stop returned %d", code)
+	}
+	if got := strings.TrimSpace(readFile(t, filepath.Join(root, "clipboard.txt"))); got != "phase two transcript" {
+		t.Fatalf("clipboard = %q", got)
+	}
+	last, err := session.Last(cfg)
+	if err != nil || last == nil {
+		t.Fatalf("session = %#v, %v", last, err)
+	}
+	if got := strings.TrimSpace(readFile(t, last.TranscriptCleanPath)); got != "phase two transcript" {
+		t.Fatalf("clean transcript = %q", got)
+	}
+	records, err := events.Read(session.SessionDir(last), 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var completed map[string]any
+	for _, record := range records {
+		if record["event"] == "transcription.completed" {
+			completed = record
+		}
+	}
+	if completed == nil || completed["voice_trigger"] != "marzipan" {
+		t.Fatalf("completed event = %#v", completed)
 	}
 }
 

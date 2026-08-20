@@ -2,6 +2,7 @@ package transcription
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"os"
 	"os/exec"
@@ -68,6 +69,53 @@ func Transcribe(profile models.Profile, audioPath, rawPath, cleanPath string, on
 	return "", ErrNoTranscript{}
 }
 
+// TranscribeStdin runs a whisper.cpp profile against an in-memory WAV. The
+// profile's input and text output are both redirected through standard
+// streams, so the caller can recognize short-lived trigger audio without
+// creating a file outside a durable recording session.
+func TranscribeStdin(profile models.Profile, wav []byte) (string, error) {
+	return TranscribeStdinContext(context.Background(), profile, wav)
+}
+
+func TranscribeStdinContext(ctx context.Context, profile models.Profile, wav []byte) (string, error) {
+	if profile.Engine != "whisper.cpp" {
+		return "", fmt.Errorf("voice trigger profile %q is not a whisper.cpp profile", profile.ID)
+	}
+	rendered := RenderCommand(profile, "-", "-", "-")
+	cmd := exec.CommandContext(ctx, "sh", "-c", rendered)
+	cmd.Stdin = bytes.NewReader(wav)
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	if err := cmd.Start(); err != nil {
+		return "", err
+	}
+	wait := make(chan error, 1)
+	go func() { wait <- cmd.Wait() }()
+	var runErr error
+	select {
+	case runErr = <-wait:
+	case <-ctx.Done():
+		_ = terminateProcessGroup(cmd.Process.Pid)
+		<-wait
+		return "", ctx.Err()
+	}
+	if runErr != nil {
+		message := strings.TrimSpace(stderr.String())
+		if message != "" {
+			return "", fmt.Errorf("voice transcription command failed: %w: %s", runErr, message)
+		}
+		return "", fmt.Errorf("voice transcription command failed: %w", runErr)
+	}
+	text := strings.TrimSpace(stdout.String())
+	if text == "" {
+		return "", ErrNoTranscript{}
+	}
+	return text, nil
+}
+
 // RenderCommand expands the profile placeholders for commands that need to
 // run the same backend without writing a session transcript, such as the
 // benchmark command.
@@ -127,6 +175,12 @@ func writeTranscript(rawPath, cleanPath, text string) error {
 		return err
 	}
 	return writeText(cleanPath, text)
+}
+
+// WriteTranscript persists a post-processing result, such as removing the
+// spoken stop word before it reaches the clipboard.
+func WriteTranscript(rawPath, cleanPath, text string) error {
+	return writeTranscript(rawPath, cleanPath, text)
 }
 
 func writeText(path, text string) error {

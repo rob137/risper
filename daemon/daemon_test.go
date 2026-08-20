@@ -14,6 +14,7 @@ import (
 	"github.com/rob137/risper/hotkeys"
 	"github.com/rob137/risper/platforms"
 	"github.com/rob137/risper/session"
+	"github.com/rob137/risper/voice"
 )
 
 type fakeListener struct {
@@ -21,6 +22,21 @@ type fakeListener struct {
 	stopped bool
 	logger  func(string)
 }
+
+type fakeVoiceListener struct {
+	started bool
+	stopped bool
+	logger  func(string)
+}
+
+func (listener *fakeVoiceListener) Start() (bool, string) {
+	listener.started = true
+	return true, "fake voice trigger listener started"
+}
+
+func (listener *fakeVoiceListener) Stop() { listener.stopped = true }
+
+func (listener *fakeVoiceListener) SetLogger(logger func(string)) { listener.logger = logger }
 
 func (listener *fakeListener) Start() (bool, string) {
 	listener.started = true
@@ -136,6 +152,43 @@ func TestRunStartsAndStopsConfiguredListener(t *testing.T) {
 	}
 	if !listener.started || !listener.stopped {
 		t.Fatalf("listener lifecycle started=%v stopped=%v", listener.started, listener.stopped)
+	}
+}
+
+func TestRunStartsAndStopsConfiguredVoiceListener(t *testing.T) {
+	cfg := daemonConfig(t)
+	cfg.VoiceTriggersEnabled = true
+	ctx, cancel := context.WithCancel(context.Background())
+	listener := &fakeVoiceListener{}
+	go func() {
+		time.Sleep(20 * time.Millisecond)
+		cancel()
+	}()
+	if err := RunWithOptions(ctx, cfg, Options{
+		VoiceListenerFactory: func(config.Config, func(voice.Action)) voice.Listener { return listener },
+		Notify:               func(config.Config, string, string) {},
+		RetryInterval:        time.Millisecond,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if !listener.started || !listener.stopped {
+		t.Fatalf("voice listener lifecycle started=%v stopped=%v", listener.started, listener.stopped)
+	}
+}
+
+func TestVoiceActionsMapToSafeToggleArguments(t *testing.T) {
+	for _, test := range []struct {
+		action voice.Action
+		want   []string
+	}{
+		{voice.ActionStart, nil},
+		{voice.ActionStop, []string{"--paste", "--voice-stop"}},
+		{voice.ActionSend, []string{"--paste", "--enter", "--voice-send"}},
+	} {
+		got := voiceToggleArgs(test.action)
+		if strings.Join(got, " ") != strings.Join(test.want, " ") {
+			t.Errorf("voiceToggleArgs(%v) = %#v, want %#v", test.action, got, test.want)
+		}
 	}
 }
 

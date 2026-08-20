@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"unicode"
 
 	"github.com/BurntSushi/toml"
 	"github.com/rob137/risper/internal/files"
@@ -30,6 +31,13 @@ paste_keys = "ctrl+v" # ydotool sequence used by shift double Alt; terminals usu
 play_sounds = true
 double_alt_enabled = false
 double_alt_window_ms = 350
+voice_triggers_enabled = false
+voice_start_word = "quasar"
+voice_stop_word = "marzipan"
+voice_send_word = "tangerine"
+voice_trigger_profile = "whispercpp-base-en"
+voice_noise_gate_db = 10.0 # speech must exceed the rolling mic floor by this much
+voice_silence_ms = 400 # silence that ends one trigger utterance
 audio_retention = "never" # never | <count>h | <count>d | <count>w; transcripts are always kept
 `
 
@@ -72,22 +80,36 @@ type Config struct {
 	PlaySounds               bool
 	DoubleAltEnabled         bool
 	DoubleAltWindowMS        int
+	VoiceTriggersEnabled     bool
+	VoiceStartWord           string
+	VoiceStopWord            string
+	VoiceSendWord            string
+	VoiceTriggerProfile      string
+	VoiceNoiseGateDB         float64
+	VoiceSilenceMS           int
 	AudioRetentionSeconds    *float64
 }
 
 type rawConfig struct {
-	SessionsDir          string `toml:"sessions_dir"`
-	SelectedModel        string `toml:"selected_model"`
-	TranscriptionEngine  string `toml:"transcription_engine"`
-	TranscriptionCommand string `toml:"transcription_command"`
-	Model                string `toml:"model"`
-	Language             string `toml:"language"`
-	PasteMode            string `toml:"paste_mode"`
-	PasteKeys            string `toml:"paste_keys"`
-	PlaySounds           bool   `toml:"play_sounds"`
-	DoubleAltEnabled     bool   `toml:"double_alt_enabled"`
-	DoubleAltWindowMS    int    `toml:"double_alt_window_ms"`
-	AudioRetention       string `toml:"audio_retention"`
+	SessionsDir          string  `toml:"sessions_dir"`
+	SelectedModel        string  `toml:"selected_model"`
+	TranscriptionEngine  string  `toml:"transcription_engine"`
+	TranscriptionCommand string  `toml:"transcription_command"`
+	Model                string  `toml:"model"`
+	Language             string  `toml:"language"`
+	PasteMode            string  `toml:"paste_mode"`
+	PasteKeys            string  `toml:"paste_keys"`
+	PlaySounds           bool    `toml:"play_sounds"`
+	DoubleAltEnabled     bool    `toml:"double_alt_enabled"`
+	DoubleAltWindowMS    int     `toml:"double_alt_window_ms"`
+	VoiceTriggersEnabled bool    `toml:"voice_triggers_enabled"`
+	VoiceStartWord       string  `toml:"voice_start_word"`
+	VoiceStopWord        string  `toml:"voice_stop_word"`
+	VoiceSendWord        string  `toml:"voice_send_word"`
+	VoiceTriggerProfile  string  `toml:"voice_trigger_profile"`
+	VoiceNoiseGateDB     float64 `toml:"voice_noise_gate_db"`
+	VoiceSilenceMS       int     `toml:"voice_silence_ms"`
+	AudioRetention       string  `toml:"audio_retention"`
 }
 
 func homeDir() string {
@@ -203,6 +225,12 @@ func Load() (Config, error) {
 		PasteKeys:           defaultPasteKeys,
 		PlaySounds:          true,
 		DoubleAltWindowMS:   350,
+		VoiceStartWord:      "quasar",
+		VoiceStopWord:       "marzipan",
+		VoiceSendWord:       "tangerine",
+		VoiceTriggerProfile: "whispercpp-base-en",
+		VoiceNoiseGateDB:    10,
+		VoiceSilenceMS:      400,
 		AudioRetention:      "never",
 	}
 	data, err := os.ReadFile(path)
@@ -224,6 +252,21 @@ func Load() (Config, error) {
 	window := raw.DoubleAltWindowMS
 	if window < 100 {
 		window = 100
+	}
+	startWord, stopWord, sendWord := normalizedVoiceWords(raw.VoiceStartWord, raw.VoiceStopWord, raw.VoiceSendWord)
+	voiceProfile := strings.TrimSpace(raw.VoiceTriggerProfile)
+	if voiceProfile == "" {
+		voiceProfile = "whispercpp-base-en"
+	}
+	noiseGateDB := raw.VoiceNoiseGateDB
+	if noiseGateDB < 3 || noiseGateDB > 40 {
+		noiseGateDB = 10
+	}
+	voiceSilenceMS := raw.VoiceSilenceMS
+	if voiceSilenceMS < 200 {
+		voiceSilenceMS = 200
+	} else if voiceSilenceMS > 1500 {
+		voiceSilenceMS = 1500
 	}
 	retention, hasRetention := ParseAudioRetention(raw.AudioRetention)
 
@@ -267,8 +310,63 @@ func Load() (Config, error) {
 		PlaySounds:               raw.PlaySounds,
 		DoubleAltEnabled:         raw.DoubleAltEnabled,
 		DoubleAltWindowMS:        window,
+		VoiceTriggersEnabled:     raw.VoiceTriggersEnabled,
+		VoiceStartWord:           startWord,
+		VoiceStopWord:            stopWord,
+		VoiceSendWord:            sendWord,
+		VoiceTriggerProfile:      voiceProfile,
+		VoiceNoiseGateDB:         noiseGateDB,
+		VoiceSilenceMS:           voiceSilenceMS,
 		AudioRetentionSeconds:    retentionPtr,
 	}, nil
+}
+
+func normalizedVoiceWords(start, stop, send string) (string, string, string) {
+	roleDefaults := []string{"quasar", "marzipan", "tangerine"}
+	fallbacks := []string{"quasar", "marzipan", "tangerine", "blueberry", "cinnamon"}
+	values := []string{start, stop, send}
+	used := make(map[string]struct{}, len(values))
+	for i, value := range values {
+		value = strings.ToLower(strings.TrimSpace(value))
+		if !validVoiceWord(value) {
+			value = ""
+		}
+		if _, exists := used[value]; value == "" || exists {
+			if _, exists := used[roleDefaults[i]]; !exists {
+				value = roleDefaults[i]
+			} else {
+				for _, fallback := range fallbacks {
+					if _, exists := used[fallback]; !exists {
+						value = fallback
+						break
+					}
+				}
+			}
+		}
+		if value == "" {
+			for _, fallback := range fallbacks {
+				if _, exists := used[fallback]; !exists {
+					value = fallback
+					break
+				}
+			}
+		}
+		values[i] = value
+		used[value] = struct{}{}
+	}
+	return values[0], values[1], values[2]
+}
+
+func validVoiceWord(value string) bool {
+	if len(strings.Fields(value)) != 1 || value == "" {
+		return false
+	}
+	for _, r := range value {
+		if !unicode.IsLetter(r) && !unicode.IsDigit(r) {
+			return false
+		}
+	}
+	return true
 }
 
 func UpdateConfigValue(key, value string) error {

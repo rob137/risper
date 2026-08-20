@@ -57,6 +57,14 @@ func pidAlive(pid int) bool {
 	return err == nil || errors.Is(err, syscall.EPERM)
 }
 
+func processGroupAlive(pid int) bool {
+	if pid <= 0 {
+		return false
+	}
+	err := syscall.Kill(-pid, 0)
+	return err == nil || errors.Is(err, syscall.EPERM)
+}
+
 func Current(cfg config.Config) (*State, error) {
 	if _, err := os.Stat(cfg.CurrentStatePath); os.IsNotExist(err) {
 		return nil, nil
@@ -245,32 +253,32 @@ func appendLog(path, message string) error {
 
 func stopPIDs(pids map[string]int) {
 	for _, pid := range pids {
-		if pidAlive(pid) {
+		if processGroupAlive(pid) {
 			_ = syscall.Kill(-pid, syscall.SIGINT)
 		}
 	}
 	for _, pid := range pids {
-		waitForExit(pid, 4*time.Second)
+		waitForGroupExit(pid, 4*time.Second)
 	}
 	for _, pid := range pids {
-		if pidAlive(pid) {
+		if processGroupAlive(pid) {
 			_ = syscall.Kill(-pid, syscall.SIGTERM)
 		}
 	}
 	for _, pid := range pids {
-		waitForExit(pid, 2*time.Second)
+		waitForGroupExit(pid, 2*time.Second)
 	}
 	for _, pid := range pids {
-		if pidAlive(pid) {
+		if processGroupAlive(pid) {
 			_ = syscall.Kill(-pid, syscall.SIGKILL)
 		}
 	}
 }
 
-func waitForExit(pid int, timeout time.Duration) {
+func waitForGroupExit(pid int, timeout time.Duration) {
 	deadline := time.Now().Add(timeout)
 	for time.Now().Before(deadline) {
-		if !pidAlive(pid) {
+		if !processGroupAlive(pid) {
 			return
 		}
 		time.Sleep(50 * time.Millisecond)

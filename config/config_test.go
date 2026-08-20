@@ -61,6 +61,9 @@ func TestLoadUsesDefaultsAndCreatesDirectories(t *testing.T) {
 	if loaded.AudioRetentionSeconds != nil {
 		t.Fatalf("default retention should be unlimited: %v", *loaded.AudioRetentionSeconds)
 	}
+	if loaded.VoiceTriggersEnabled || loaded.VoiceStartWord != "quasar" || loaded.VoiceStopWord != "marzipan" || loaded.VoiceSendWord != "tangerine" {
+		t.Fatalf("unexpected voice trigger defaults: %+v", loaded)
+	}
 	for _, path := range []string{loaded.ConfigPath, loaded.DataDir, loaded.SessionsDir, loaded.StateDir} {
 		if _, err := os.Stat(path); err != nil {
 			t.Errorf("expected %s to exist: %v", path, err)
@@ -114,7 +117,7 @@ func TestLoadNormalizesCompatibilityValues(t *testing.T) {
 		t.Fatal(err)
 	}
 	customSessions := filepath.Join(home, "custom-sessions")
-	if err := os.WriteFile(path, []byte("sessions_dir = \"~/custom-sessions\"\npaste_mode = \"not-real\"\ndouble_alt_window_ms = 20\naudio_retention = \"7d\"\n"), 0o644); err != nil {
+	if err := os.WriteFile(path, []byte("sessions_dir = \"~/custom-sessions\"\npaste_mode = \"not-real\"\ndouble_alt_window_ms = 20\nvoice_triggers_enabled = true\nvoice_start_word = \"  Nimbus  \"\nvoice_stop_word = \"Nimbus\"\nvoice_send_word = \"\"\nvoice_noise_gate_db = 2\nvoice_silence_ms = 2000\naudio_retention = \"7d\"\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	loaded, err := Load()
@@ -123,6 +126,9 @@ func TestLoadNormalizesCompatibilityValues(t *testing.T) {
 	}
 	if loaded.SessionsDir != customSessions || loaded.PasteMode != "clipboard_only" || !loaded.PlaySounds || loaded.DoubleAltWindowMS != 100 {
 		t.Fatalf("unexpected normalized config: %+v", loaded)
+	}
+	if !loaded.VoiceTriggersEnabled || loaded.VoiceStartWord != "nimbus" || loaded.VoiceStopWord != "marzipan" || loaded.VoiceSendWord != "tangerine" || loaded.VoiceNoiseGateDB != 10 || loaded.VoiceSilenceMS != 1500 {
+		t.Fatalf("unexpected normalized voice config: %+v", loaded)
 	}
 	if loaded.AudioRetentionSeconds == nil || *loaded.AudioRetentionSeconds != 7*86400 {
 		t.Fatalf("unexpected retention: %v", loaded.AudioRetentionSeconds)

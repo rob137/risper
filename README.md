@@ -2,7 +2,7 @@
 
 Risper is a local-first Ubuntu dictation utility built around durable session folders. Recording creates the folder and metadata before audio capture starts, and failures leave recoverable files behind.
 
-The Go rewrite is complete. Go owns recording, mixing, local transcription, clipboard copy, notifications, sounds, the command surface, daemon recovery, audio retention, and the optional Linux Double Alt listener.
+The Go rewrite is complete. Go owns recording, mixing, local transcription, clipboard copy, notifications, sounds, the command surface, daemon recovery, audio retention, and the optional Linux Double Alt and voice-trigger listeners.
 
 ## Commands
 
@@ -86,6 +86,13 @@ double_alt_enabled = false
 double_alt_window_ms = 350
 paste_keys = "ctrl+v"
 audio_retention = "never" # never | <count>h | <count>d | <count>w
+voice_triggers_enabled = false
+voice_start_word = "quasar"
+voice_stop_word = "marzipan"
+voice_send_word = "tangerine"
+voice_trigger_profile = "whispercpp-base-en"
+voice_noise_gate_db = 10.0
+voice_silence_ms = 400
 ```
 
 Model profiles live in:
@@ -176,6 +183,14 @@ Double Alt is an optional Linux input-event listener in `risper-daemon`, disable
 Double Alt runs `risper-toggle --paste`, which replays `paste_keys` into the focused window once the transcript is copied. Holding Shift across both taps runs `risper-toggle --paste --enter`, which follows the paste with Return. Both need `ydotoold`, and the target is whatever has focus when transcription finishes, not when the gesture was made.
 
 Plain `risper-toggle` still only copies, so the GNOME custom shortcut remains the clipboard-only path.
+
+Voice triggers are a separate optional Linux daemon listener. Set
+`voice_triggers_enabled = true` only after choosing three uncommon,
+distinct words; the defaults are placeholders for Rob to review. The listener
+uses the microphone only, an adaptive relative loudness gate, and short
+in-memory whisper.cpp bursts. It never listens to the mixed speaker monitor or
+persists pre-recording audio; the internal laptop mic can still hear speakers
+acoustically. See [docs/voice-triggers.md](docs/voice-triggers.md).
 
 ## Environment
 

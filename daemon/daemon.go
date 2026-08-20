@@ -11,6 +11,7 @@ import (
 	"os/signal"
 	"path/filepath"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
@@ -20,6 +21,8 @@ import (
 	"github.com/rob137/risper/platforms"
 	"github.com/rob137/risper/recording"
 	"github.com/rob137/risper/session"
+	"github.com/rob137/risper/transcription"
+	"github.com/rob137/risper/voice"
 )
 
 const (
@@ -28,17 +31,23 @@ const (
 )
 
 type Options struct {
-	ListenerFactory func(windowMS int, onTrigger func(hotkeys.Gesture)) platforms.DoubleAltListener
-	Notify          func(config.Config, string, string)
-	ToggleCommand   string
-	PruneInterval   time.Duration
-	RetryInterval   time.Duration
+	ListenerFactory      func(windowMS int, onTrigger func(hotkeys.Gesture)) platforms.DoubleAltListener
+	VoiceListenerFactory func(cfg config.Config, onAction func(voice.Action)) voice.Listener
+	Notify               func(config.Config, string, string)
+	ToggleCommand        string
+	PruneInterval        time.Duration
+	RetryInterval        time.Duration
 }
 
 func (options Options) withDefaults() Options {
 	if options.ListenerFactory == nil {
 		options.ListenerFactory = func(windowMS int, onTrigger func(hotkeys.Gesture)) platforms.DoubleAltListener {
 			return platforms.NewLinuxDoubleAltListener(windowMS, onTrigger)
+		}
+	}
+	if options.VoiceListenerFactory == nil {
+		options.VoiceListenerFactory = func(cfg config.Config, onAction func(voice.Action)) voice.Listener {
+			return voice.NewListener(cfg, onAction)
 		}
 	}
 	if options.Notify == nil {
@@ -124,10 +133,68 @@ func RunWithOptions(ctx context.Context, cfg config.Config, rawOptions Options) 
 			notifiedUnavailable = true
 		}
 	}
+
+	var voiceListener voice.Listener
+	voiceNotifiedUnavailable := false
+	var voiceActionMu sync.Mutex
+	voiceActionInFlight := false
+	voiceAction := func(action voice.Action) {
+		voiceActionMu.Lock()
+		if voiceActionInFlight {
+			voiceActionMu.Unlock()
+			return
+		}
+		allowed, reason := voiceActionAllowed(cfg, action)
+		if !allowed {
+			voiceActionMu.Unlock()
+			appendLog(cfg.LogPath, "voice trigger ignored: "+reason)
+			return
+		}
+		voiceActionInFlight = true
+		voiceActionMu.Unlock()
+		args := voiceToggleArgs(action)
+		if !startToggleArgs(cfg, options, "voice", args, func() {
+			voiceActionMu.Lock()
+			voiceActionInFlight = false
+			voiceActionMu.Unlock()
+		}) {
+			voiceActionMu.Lock()
+			voiceActionInFlight = false
+			voiceActionMu.Unlock()
+		}
+	}
+	startVoiceListener := func() {
+		if !cfg.VoiceTriggersEnabled || !platforms.IsLinux() || voiceListener != nil {
+			return
+		}
+		candidate := options.VoiceListenerFactory(cfg, voiceAction)
+		if candidate == nil {
+			appendLog(cfg.LogPath, "voice trigger listener unavailable: factory returned no listener")
+			return
+		}
+		candidate.SetLogger(func(message string) { appendLog(cfg.LogPath, message) })
+		ok, message := candidate.Start()
+		appendLog(cfg.LogPath, message)
+		if ok {
+			voiceListener = candidate
+			voiceNotifiedUnavailable = false
+			return
+		}
+		candidate.Stop()
+		if !voiceNotifiedUnavailable {
+			options.Notify(cfg, "⚠ Risper voice triggers unavailable", message)
+			voiceNotifiedUnavailable = true
+		}
+	}
 	if cfg.DoubleAltEnabled && !platforms.IsLinux() {
 		appendLog(cfg.LogPath, "double-alt disabled; input listener is Linux-only")
 	} else {
 		startListener()
+	}
+	if cfg.VoiceTriggersEnabled && !platforms.IsLinux() {
+		appendLog(cfg.LogPath, "voice triggers disabled; audio listener is Linux-only")
+	} else {
+		startVoiceListener()
 	}
 
 	pruneTicker := time.NewTicker(options.PruneInterval)
@@ -140,12 +207,16 @@ func RunWithOptions(ctx context.Context, cfg config.Config, rawOptions Options) 
 			if listener != nil {
 				listener.Stop()
 			}
+			if voiceListener != nil {
+				voiceListener.Stop()
+			}
 			appendLog(cfg.LogPath, "daemon stopped")
 			return nil
 		case <-pruneTicker.C:
 			pruneAudio(cfg)
 		case <-retryTicker.C:
 			startListener()
+			startVoiceListener()
 		}
 	}
 }
@@ -184,7 +255,49 @@ func toggleArgs(gesture hotkeys.Gesture) []string {
 	}
 }
 
+func voiceToggleArgs(action voice.Action) []string {
+	switch action {
+	case voice.ActionStart:
+		return nil
+	case voice.ActionStop:
+		return []string{"--paste", "--voice-stop"}
+	case voice.ActionSend:
+		return []string{"--paste", "--enter", "--voice-send"}
+	default:
+		return nil
+	}
+}
+
+func voiceActionAllowed(cfg config.Config, action voice.Action) (bool, string) {
+	if current, err := transcription.Current(cfg); err != nil {
+		return false, "could not inspect transcription state: " + err.Error()
+	} else if current != nil {
+		return false, "transcription is already running"
+	}
+	current, err := recording.Current(cfg)
+	if err != nil {
+		return false, "could not inspect recording state: " + err.Error()
+	}
+	switch action {
+	case voice.ActionStart:
+		if current != nil {
+			return false, "recording is already active"
+		}
+	case voice.ActionStop, voice.ActionSend:
+		if current == nil {
+			return false, "no recording is active"
+		}
+	default:
+		return false, "unknown action"
+	}
+	return true, ""
+}
+
 func startToggle(cfg config.Config, options Options, gesture hotkeys.Gesture) {
+	startToggleArgs(cfg, options, "double-alt", toggleArgs(gesture), nil)
+}
+
+func startToggleArgs(cfg config.Config, options Options, source string, args []string, onDone func()) bool {
 	command := options.ToggleCommand
 	path, err := exec.LookPath(command)
 	if err != nil {
@@ -197,23 +310,28 @@ func startToggle(cfg config.Config, options Options, gesture hotkeys.Gesture) {
 		}
 	}
 	if err != nil {
-		appendLog(cfg.LogPath, "double-alt toggle unavailable: "+err.Error())
-		return
+		appendLog(cfg.LogPath, source+" toggle unavailable: "+err.Error())
+		return false
 	}
-	args := toggleArgs(gesture)
 	cmd := exec.Command(path, args...)
 	cmd.Stdout = io.Discard
 	cmd.Stderr = io.Discard
 	if err := cmd.Start(); err != nil {
-		appendLog(cfg.LogPath, "double-alt toggle failed to start: "+err.Error())
-		return
+		appendLog(cfg.LogPath, source+" toggle failed to start: "+err.Error())
+		return false
 	}
 	if len(args) > 0 {
-		appendLog(cfg.LogPath, "double-alt trigger "+strings.Join(args, " "))
+		appendLog(cfg.LogPath, source+" trigger "+strings.Join(args, " "))
 	} else {
-		appendLog(cfg.LogPath, "double-alt trigger")
+		appendLog(cfg.LogPath, source+" trigger")
 	}
-	go func() { _ = cmd.Wait() }()
+	go func() {
+		_ = cmd.Wait()
+		if onDone != nil {
+			onDone()
+		}
+	}()
+	return true
 }
 
 func appendLog(path, message string) {

@@ -126,6 +126,52 @@ printf 'guarded transcript\n'
 	}
 }
 
+func TestTranscribeStdinRecognizesWithoutCreatingAudioFiles(t *testing.T) {
+	root := t.TempDir()
+	bin := filepath.Join(root, "bin")
+	if err := os.Mkdir(bin, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	argumentsPath := filepath.Join(root, "arguments.log")
+	engine := `#!/bin/sh
+for arg in "$@"; do
+  printf '<%s>\n' "$arg" >> "$ARGUMENTS_LOG"
+done
+cat >/dev/null
+printf '%s' quasar
+`
+	if err := os.WriteFile(filepath.Join(bin, "whisper-cli"), []byte(engine), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
+	t.Setenv("ARGUMENTS_LOG", argumentsPath)
+
+	transcript, err := TranscribeStdin(models.Profile{
+		ID:      "whispercpp-base-en",
+		Engine:  "whisper.cpp",
+		Command: "whisper-cli -f {audio} -mc 0",
+	}, []byte("RIFF in memory"))
+	if err != nil || transcript != "quasar" {
+		t.Fatalf("transcript = %q, err = %v", transcript, err)
+	}
+	arguments, err := os.ReadFile(argumentsPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(arguments), "<->\n") {
+		t.Fatalf("stdin input marker missing: %q", arguments)
+	}
+	entries, err := os.ReadDir(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, entry := range entries {
+		if strings.HasSuffix(entry.Name(), ".wav") {
+			t.Fatalf("voice recognition created an audio file %s", entry.Name())
+		}
+	}
+}
+
 func TestTranscribeReturnsEngineError(t *testing.T) {
 	root := t.TempDir()
 	rawPath := filepath.Join(root, "raw.txt")
