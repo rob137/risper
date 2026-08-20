@@ -179,8 +179,9 @@ type Playback struct {
 }
 
 // PlayAsync starts a sound helper immediately and returns without waiting for
-// the sound to finish. The helper is still reaped, and callers that own a
-// lifecycle boundary can call Wait to keep it from outliving that boundary.
+// the sound to finish. The helper is reaped when the caller remains alive or
+// waits on the handle; if the caller exits first, the desktop process owns the
+// remaining short-lived helper.
 func PlayAsync(cfg config.Config, kind string) Playback {
 	done := make(chan struct{})
 	if !cfg.PlaySounds || !config.CommandExists("canberra-gtk-play") {
@@ -188,8 +189,15 @@ func PlayAsync(cfg config.Config, kind string) Playback {
 		return Playback{done: done}
 	}
 	event, volume := sound(kind)
+	args := []string{"-i", event, "-V", volume}
+	if kind == "success_send" {
+		if path, ok := generatedSuccessSend(cfg, event); ok {
+			args = []string{"-f", path, "-V", volume}
+		}
+	}
+	args = append(args, "-d", "Risper "+kind)
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
-	cmd := exec.CommandContext(ctx, "canberra-gtk-play", "-i", event, "-V", volume, "-d", "Risper "+kind)
+	cmd := exec.CommandContext(ctx, "canberra-gtk-play", args...)
 	cmd.Stdout = io.Discard
 	cmd.Stderr = io.Discard
 	if err := cmd.Start(); err != nil {
@@ -220,7 +228,7 @@ func sound(kind string) (string, string) {
 		return "service-login", "-18"
 	case "transcription_progress":
 		return "bell", "-6"
-	case "success", "stop":
+	case "success", "success_send", "stop":
 		return "complete", "-18"
 	case "cancel":
 		return "service-logout", "-18"

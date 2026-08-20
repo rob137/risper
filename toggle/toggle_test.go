@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/rob137/risper/config"
 	"github.com/rob137/risper/events"
@@ -36,6 +37,10 @@ trap 'exit 0' INT TERM
 while :; do sleep 0.05; done
 `,
 		"ffmpeg": `#!/bin/sh
+if [ "$1" = "-hide_banner" ] && [ "$2" = "-filters" ]; then
+  printf ' T.C rubberband A->A Apply time-stretching\n'
+  exit 0
+fi
 output=
 for arg in "$@"; do output="$arg"; done
 printf 'RIFFmixed-audio-padding-01234567890123456789012345678901234567890123456789' > "$output"
@@ -62,6 +67,9 @@ printf 'clipboard\n' >> "$ORDER_LOG"
 printf '%s\n' "$*" >> "$NOTIFY_LOG"
 printf '42\n'
 `,
+		"gsettings": `#!/bin/sh
+printf "'Yaru'\n"
+`,
 		"canberra-gtk-play": `#!/bin/sh
 args="$*"
 printf '%s\n' "$args" >> "$SOUND_LOG"
@@ -70,6 +78,11 @@ case "$args" in
     printf 'transcription-started\n' >> "$ORDER_LOG"
     if [ -n "${TRANSCRIPTION_SOUND_DELAY:-}" ]; then sleep "$TRANSCRIPTION_SOUND_DELAY"; fi
     printf 'transcription-finished\n' >> "$ORDER_LOG"
+    ;;
+  *"Risper success_send"*)
+    printf 'success-started\n' >> "$ORDER_LOG"
+    if [ -n "${SUCCESS_SOUND_DELAY:-}" ]; then sleep "$SUCCESS_SOUND_DELAY"; fi
+    printf 'success-finished\n' >> "$ORDER_LOG"
     ;;
 esac
 `,
@@ -104,6 +117,16 @@ exit "${YDOTOOL_EXIT:-0}"
 	}
 	t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
 	if err := os.MkdirAll(filepath.Join(configHome, "risper"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	soundDir := filepath.Join(dataHome, "sounds", "Yaru", "stereo")
+	if err := os.MkdirAll(soundDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dataHome, "sounds", "Yaru", "index.theme"), []byte("[Sound Theme]\nDirectories=stereo\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(soundDir, "complete.oga"), []byte("yaru source"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	configText := `sessions_dir = "` + sessions + `"
@@ -251,6 +274,9 @@ func TestTogglePastesAndSubmitsWhenAsked(t *testing.T) {
 	if got := readFile(t, filepath.Join(root, "ydotool.log")); got != "key --delay 150 ctrl+v\nkey --delay 300 enter\n" {
 		t.Fatalf("ydotool log = %q", got)
 	}
+	if got := waitForToggleText(t, filepath.Join(root, "sound.log"), "-f "+filepath.Join(cfg.DataDir, "success-send-")); !strings.Contains(got, "-f "+filepath.Join(cfg.DataDir, "success-send-")) {
+		t.Fatalf("send sound was not generated and played from a file: %q", got)
+	}
 	last, err := session.Last(cfg)
 	if err != nil || last == nil {
 		t.Fatalf("session = %#v, %v", last, err)
@@ -271,6 +297,23 @@ func TestTogglePastesAndSubmitsWhenAsked(t *testing.T) {
 	}
 	if last.PasteConfirmation != "helper_ran_target_unverified" {
 		t.Fatalf("paste_confirmation = %q", last.PasteConfirmation)
+	}
+}
+
+func TestToggleDoesNotWaitForSendSound(t *testing.T) {
+	root, _ := stubEnvironment(t)
+	t.Setenv("SUCCESS_SOUND_DELAY", "0.5")
+	if code := Main(nil); code != 0 {
+		t.Fatalf("start returned %d", code)
+	}
+	if code := Main([]string{"--paste", "--enter"}); code != 0 {
+		t.Fatalf("paste stop returned %d", code)
+	}
+
+	orderPath := filepath.Join(root, "order.log")
+	waitForToggleText(t, orderPath, "success-started")
+	if got := readFile(t, orderPath); strings.Contains(got, "success-finished") {
+		t.Fatalf("toggle waited for the send sound: %q", got)
 	}
 }
 
@@ -389,6 +432,20 @@ func indexOf(lines []string, want string) int {
 		}
 	}
 	return -1
+}
+
+func waitForToggleText(t *testing.T, path, want string) string {
+	t.Helper()
+	deadline := time.Now().Add(time.Second)
+	for time.Now().Before(deadline) {
+		data, err := os.ReadFile(path)
+		if err == nil && strings.Contains(string(data), want) {
+			return string(data)
+		}
+		time.Sleep(time.Millisecond)
+	}
+	t.Fatalf("timed out waiting for %q in %s", want, path)
+	return ""
 }
 
 func assertAudioFiles(t *testing.T, metadata *session.Metadata) {

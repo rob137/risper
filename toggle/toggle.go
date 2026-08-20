@@ -98,7 +98,9 @@ func Main(args []string) int {
 		return fail(cfg, err)
 	}
 	desktop.Notify(cfg, "🎙 Risper listening to mic and computer", "Run risper-toggle again to stop.")
-	desktop.Play(cfg, "recording_start")
+	// A voice-started toggle must return to the listener as soon as recording
+	// is established; the sound helper can finish independently.
+	desktop.PlayAsync(cfg, "recording_start")
 	fmt.Printf("Risper %s: recording %s sources=mic,system\n", version, state.SessionDir)
 	return 0
 }
@@ -197,7 +199,7 @@ func finishSession(cfg config.Config, metadata *session.Metadata, request finish
 	if !copied {
 		return transcriptionFailure(cfg, metadata, errors.New(clipboardMessage))
 	}
-	pasted, pasteMessage, confirmation := placeTranscript(cfg, request)
+	pasted, submitted, pasteMessage, confirmation := placeTranscript(cfg, request)
 	appendLog(filepath.Join(session.SessionDir(metadata), session.StatusLogFile), pasteMessage)
 	if request.paste {
 		_, _ = events.Append(session.SessionDir(metadata), "paste.result", map[string]any{
@@ -230,29 +232,36 @@ func finishSession(cfg config.Config, metadata *session.Metadata, request finish
 	} else {
 		desktop.Notify(cfg, "✅ Risper copied", "Transcript is on the clipboard.")
 	}
-	desktop.Play(cfg, "success")
+	if submitted {
+		// The send sound is intentionally fire-and-forget here. The daemon uses
+		// toggle process exit as its in-flight boundary, so waiting for the
+		// 1.29s rising pair would create a deadband before the next trigger.
+		desktop.PlayAsync(cfg, "success_send")
+	} else {
+		desktop.PlayAsync(cfg, "success")
+	}
 	return 0
 }
 
 // placeTranscript replays the paste shortcut, and then Return, into whatever
 // window holds focus. Each ydotool call waits before pressing, which also
 // gives the target time to accept the paste before Return arrives.
-func placeTranscript(cfg config.Config, request finish) (bool, string, string) {
+func placeTranscript(cfg config.Config, request finish) (bool, bool, string, string) {
 	if !request.paste {
-		return false, "automatic paste skipped; transcript left on clipboard", "not_attempted_automatic_paste_disabled"
+		return false, false, "automatic paste skipped; transcript left on clipboard", "not_attempted_automatic_paste_disabled"
 	}
 	pasted, message := desktop.SendKeys(cfg.PasteKeys, pasteSettleMS)
 	if !pasted {
-		return false, message, "not_pasted_clipboard_retained"
+		return false, false, message, "not_pasted_clipboard_retained"
 	}
 	if !request.enter {
-		return true, message, "helper_ran_target_unverified"
+		return true, false, message, "helper_ran_target_unverified"
 	}
 	sent, enterMessage := desktop.SendKeys("enter", returnSettleMS)
 	if !sent {
-		return true, message + "; " + enterMessage, "pasted_but_return_not_sent"
+		return true, false, message + "; " + enterMessage, "pasted_but_return_not_sent"
 	}
-	return true, message + "; " + enterMessage, "helper_ran_target_unverified"
+	return true, true, message + "; " + enterMessage, "helper_ran_target_unverified"
 }
 
 func heartbeat(cfg config.Config, title, body string, stop <-chan struct{}) {

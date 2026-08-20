@@ -72,9 +72,20 @@ decision rather than a promise here.
 The `transcription_start` desktop sound starts when the stop-to-transcribe
 path begins but no longer blocks recognition, clipboard copy, or paste. The
 toggle waits for its helper only before the process exits, so the sound cannot
-outlive a toggle-cycle test's temporary directory. The recording-start and
-success sounds remain synchronous because they only affect process exit, not
-the stop-to-paste pipeline.
+outlive a toggle-cycle test's temporary directory. Recording-start and
+successful completion sounds are launched asynchronously so a voice-triggered
+toggle returns to the listener without a chime-length in-flight deadband.
+
+Plain paste keeps the active theme's single `complete` event sound. A
+paste-and-send run tries to build the selected rising pair on first use: it
+resolves `complete` from the active sound theme, feeds that file to both inputs
+of the chosen `rubberband`/`adelay`/`amix`/`alimiter` filter, and caches the
+result as a local `success-send-*.wav` under `~/.local/share/risper/`. The
+cache is keyed to the resolved source path and metadata, so switching sound
+themes selects a new source without putting a derived audio asset in the
+repository. If theme resolution, `ffmpeg`, the `rubberband` filter, or
+generation itself is unavailable, the send run plays the ordinary single
+`complete` event instead.
 
 Enabling the feature requires the configured voice profile to exist in
 `models.toml`, `pw-record` to be available, and the daemon to be restarted.
