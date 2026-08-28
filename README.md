@@ -2,7 +2,10 @@
 
 Risper is a local-first Ubuntu dictation utility built around durable session folders. Recording creates the folder and metadata before audio capture starts, and failures leave recoverable files behind.
 
-The Go rewrite is complete. Go owns recording, mixing, local transcription, clipboard copy, notifications, sounds, the command surface, daemon recovery, audio retention, and the optional Linux Double Alt and voice-trigger listeners.
+The Go rewrite is complete. Go owns recording, mixing, local and opt-in OpenAI
+transcription, clipboard copy, notifications, sounds, the command surface,
+daemon recovery, audio retention, and the optional Linux Double Alt and
+voice-trigger listeners.
 
 ## Commands
 
@@ -11,7 +14,7 @@ The Go rewrite is complete. Go owns recording, mixing, local transcription, clip
 - `risper history`: lists recent sessions and opens, plays, copies, retranscribes, deletes, or prunes them.
 - `risper open`: opens recordings, the last session, the last transcript, the last audio file, or the config.
 - `risper retranscribe`: retranscribes a saved session from its mixed audio.
-- `risper models`: lists, selects, and adds local transcription model profiles.
+- `risper models`: lists, selects, and adds transcription model profiles.
 - `risper benchmark`: measures transcription profile wall time, CPU use, and peak RSS.
 - `risper diagnose`: prints environment or session diagnostics.
 - `risper paste-test`: copies a marker to the clipboard so clipboard access can be checked manually.
@@ -101,7 +104,8 @@ Model profiles live in:
 ~/.config/risper/models.toml
 ```
 
-Each profile is a local command with metadata. It can use these placeholders:
+Each profile describes an engine with metadata. Local command profiles can use
+these placeholders:
 
 ```text
 {audio} {raw} {raw_no_txt} {clean} {clean_no_txt} {model} {language} {prompt}
@@ -131,6 +135,56 @@ risper models add-external my-engine \
   --command "/path/to/local-wrapper --model {model} --audio {audio}" \
   --select
 ```
+
+### Optional OpenAI transcription
+
+Risper remains local-first: whisper.cpp is still a first-class profile and the
+default is not changed by this option. An OpenAI profile is an explicit choice
+that sends the mixed `audio.wav` to a remote service, so do not use it for
+confidential material unless that is acceptable for the recording. It also
+incurs API charges and depends on network availability. The API key's account,
+project, and organisation have to be checked by Rob; this repository does not
+assume which OpenAI organisation owns a key.
+
+Newly generated `models.toml` files contain a commented example. Existing
+registries are never rewritten, so add the profile manually there; then select
+it only when remote transcription is wanted:
+
+```toml
+[models.openai-gpt-transcribe]
+engine = "openai"
+model = "gpt-transcribe"
+language = "en"
+api_key_file = "~/.config/openai/key"
+prompt = "A short comma-separated list of names and terms to recognize."
+```
+
+The key file must remain outside the registry, be readable only by Rob
+(normally mode `0600`), and never be committed. The OpenAI engine reads it
+locally; do not put the key itself in TOML, an environment dump, or a command
+line. The endpoint accepts multipart audio, model, language, and prompt fields
+and returns transcript text in its response; see the [OpenAI transcription API
+reference](https://developers.openai.com/api/reference/resources/audio/subresources/transcriptions/methods/create).
+The `gpt-transcribe` model's current published price is listed in the [OpenAI
+model documentation](https://developers.openai.com/api/docs/models/gpt-transcribe)
+and can change, so check it before deciding whether the latency is worth the
+cost.
+
+OpenAI's current data-control documentation says API inputs are not used to
+train models unless the account opts in, and lists no abuse-monitoring or
+application-state retention for `/v1/audio/transcriptions`. That is still a
+remote disclosure boundary, and the company's actual project settings and
+policy need verification. See [Data controls in the OpenAI
+platform](https://developers.openai.com/api/docs/guides/your-data).
+
+The profile prompt is useful for proper nouns and jargon, but keep it short and
+review it as shared with the remote service. Voice triggers remain local-only:
+`voice_trigger_profile` must point to a `whisper.cpp` profile.
+
+To compare an opt-in remote profile, benchmark the same saved audio with both
+profiles. A benchmark measures the end-to-end local process and network call,
+not just model compute; repeat it over representative real speech before
+changing the selected profile. See [docs/performance.md](docs/performance.md).
 
 To install or refresh whisper.cpp locally:
 
@@ -204,3 +258,5 @@ cd ~/personal/risper
 ```
 
 Uninstall keeps config, state, recordings, and transcripts.
+
+Codex gpt-5.6-sol, xhigh, prompted by Robert Kirby

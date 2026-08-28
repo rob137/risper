@@ -28,3 +28,29 @@ Interpretation:
 - small.en is roughly 3x slower and ~2.5x the RSS of base.en, but on a 53s real dictation it fixed three meaning-level errors base.en made ("coal face" vs "cold face", an entirely garbled clause, "slightly" vs "slowly"). small.en is the selected default for that reason.
 - base.en stays registered as the fast fallback profile.
 - Any future engine should be benchmarked with the same command and compared against these figures before being made the default.
+
+## Optional cloud comparison
+
+An authored synthetic 10.05s clip was sent through seven OpenAI transcription
+calls during the August 2026 investigation, including a final call through the
+native Go engine. End-to-end calls took about
+0.90-1.79s. `gpt-transcribe` kept the tested proper nouns stable; the tested
+`gpt-4o-mini-transcribe` calls varied more. The two directly inspected
+`gpt-transcribe` responses each reported 11 seconds of duration usage for the
+clip. At the published price on 2026-08-28 (`$0.0045` per minute), that is about
+`$0.000825` per call. These are directional observations, not a latency
+guarantee: the clip was synthetic, the sample is small, and network/API
+conditions vary.
+
+The corresponding local synthetic run took about 40s, which is anomalous
+against the real-speech baselines above and should not be used as a general
+local-versus-cloud conclusion. Repeat the comparison with representative
+speech, the same saved audio, and several runs. Include upload time, API
+round-trip, model selection, and current published prices in the decision.
+Cloud mode is opt-in and sends the recording away from the machine; local
+whisper.cpp remains the confidentiality-preserving choice. See the [OpenAI
+GPT-Transcribe model documentation](https://developers.openai.com/api/docs/models/gpt-transcribe)
+and [API pricing](https://developers.openai.com/api/docs/pricing/) for current
+values.
+
+Codex gpt-5.6-sol, xhigh, prompted by Robert Kirby

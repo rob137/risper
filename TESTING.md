@@ -126,3 +126,26 @@ Still environment-limited:
 - Confirming a paste actually reached the focused window.
 - A standalone tray indicator or recording window. Notifications and the GNOME microphone indicator are the current feedback path.
 - Double Alt unless `double_alt_enabled = true` and the daemon can read `/dev/input/event*`.
+
+## Optional OpenAI profile check
+
+Live cloud calls are not part of the automated test suite; local HTTP test
+servers cover request formatting, key handling, response validation, and
+timeouts. If Rob enables the commented OpenAI profile in `models.toml`, first
+verify that
+`~/.config/openai/key` is mode `0600`, belongs to the intended OpenAI project
+and organisation, and is not copied into the registry or a command line. Use a
+short, non-confidential saved session and select the profile explicitly:
+
+```bash
+risper models select openai-gpt-transcribe
+risper retranscribe <session-id>
+```
+
+This sends the mixed audio and profile prompt to OpenAI and incurs API usage.
+Check the resulting transcript and session timing, then select the local
+profile again when finished. Voice triggers remain local-only and require the
+`whispercpp-base-en` profile. The API request/response contract is documented
+in the [OpenAI transcription API reference](https://developers.openai.com/api/reference/resources/audio/subresources/transcriptions/methods/create).
+
+Codex gpt-5.6-sol, xhigh, prompted by Robert Kirby
