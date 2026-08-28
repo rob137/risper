@@ -14,15 +14,21 @@ import (
 	"github.com/rob137/risper/models"
 )
 
-// ErrNoTranscript means that the configured local engine completed without
-// printing or writing a transcript.
+// ErrNoTranscript means that the configured engine completed without printing
+// or writing a transcript.
 type ErrNoTranscript struct{}
 
-func (ErrNoTranscript) Error() string { return "transcription command produced no transcript" }
+func (ErrNoTranscript) Error() string { return "transcription produced no transcript" }
 
-// Transcribe runs the selected local engine and accepts either stdout or the
-// raw/clean output files documented by the model profile format.
+// Transcribe runs the selected engine. External profiles accept either stdout
+// or the raw/clean output files documented by the model profile format; the
+// native OpenAI profile parses its JSON response before writing both files.
 func Transcribe(profile models.Profile, audioPath, rawPath, cleanPath string, onProcessStart func(pid int) error) (string, error) {
+	if profile.Engine == "openai" {
+		// The native HTTP path has no child process. The controller PID remains
+		// the cancellation boundary for this in-process request.
+		return transcribeOpenAI(profile, audioPath, rawPath, cleanPath)
+	}
 	rendered := renderCommand(profile, audioPath, rawPath, cleanPath)
 	cmd := exec.Command("sh", "-c", rendered)
 	var stdout bytes.Buffer
@@ -186,3 +192,5 @@ func WriteTranscript(rawPath, cleanPath, text string) error {
 func writeText(path, text string) error {
 	return files.AtomicWriteText(path, strings.TrimSpace(text)+"\n")
 }
+
+// Codex gpt-5.6-sol, xhigh, prompted by Robert Kirby

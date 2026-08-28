@@ -2,8 +2,8 @@
 package benchmark
 
 import (
-	"bytes"
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"os"
@@ -138,24 +138,21 @@ func runProfile(profile models.Profile, audioPath string) (Result, error) {
 	defer os.RemoveAll(root)
 	rawPath := filepath.Join(root, "transcript.raw.txt")
 	cleanPath := filepath.Join(root, "transcript.clean.txt")
-	command := transcription.RenderCommand(profile, audioPath, rawPath, cleanPath)
 	before := childUsage()
 	started := time.Now()
-	var stdout, stderr bytes.Buffer
-	process := exec.Command("sh", "-c", command)
-	process.Stdout = &stdout
-	process.Stderr = &stderr
-	runErr := process.Run()
+	transcript, runErr := transcription.Transcribe(profile, audioPath, rawPath, cleanPath, nil)
 	elapsed := time.Since(started).Seconds()
 	after := childUsage()
 	returnCode := 0
+	stderrTail := []string{}
 	if runErr != nil {
 		returnCode = -1
-		if exitErr, ok := runErr.(*exec.ExitError); ok {
+		var exitErr *exec.ExitError
+		if errors.As(runErr, &exitErr) {
 			returnCode = exitErr.ExitCode()
 		}
+		stderrTail = errorTail(runErr, 5)
 	}
-	transcript := outputText(rawPath, cleanPath, stdout.String())
 	userSeconds := duration(after.Utime) - duration(before.Utime)
 	systemSeconds := duration(after.Stime) - duration(before.Stime)
 	cpuPercent := 0.0
@@ -169,7 +166,7 @@ func runProfile(profile models.Profile, audioPath string) (Result, error) {
 		CPUPercent: round(cpuPercent, 1), MaxRSSMB: round(float64(after.Maxrss)/1024, 1),
 		TranscriptChars:   len([]rune(transcript)),
 		TranscriptPreview: truncate(strings.Join(strings.Fields(transcript), " "), 100),
-		StderrTail:        tailLines(stderr.String(), 5),
+		StderrTail:        stderrTail,
 	}, nil
 }
 
@@ -183,15 +180,6 @@ func duration(value syscall.Timeval) float64 {
 	return float64(value.Sec) + float64(value.Usec)/1_000_000
 }
 
-func outputText(rawPath, cleanPath, stdout string) string {
-	for _, path := range []string{rawPath, cleanPath} {
-		if data, err := os.ReadFile(path); err == nil {
-			return strings.TrimSpace(string(data))
-		}
-	}
-	return strings.TrimSpace(stdout)
-}
-
 func tailLines(text string, count int) []string {
 	lines := strings.Split(strings.TrimSpace(text), "\n")
 	if len(lines) == 1 && lines[0] == "" {
@@ -199,6 +187,18 @@ func tailLines(text string, count int) []string {
 	}
 	if len(lines) > count {
 		lines = lines[len(lines)-count:]
+	}
+	return lines
+}
+
+func errorTail(err error, count int) []string {
+	if err == nil {
+		return []string{}
+	}
+	lines := tailLines(err.Error(), count)
+	const maxLineRunes = 512
+	for index, line := range lines {
+		lines[index] = truncate(line, maxLineRunes)
 	}
 	return lines
 }
@@ -237,3 +237,5 @@ func reportError(err error) int {
 	fmt.Fprintln(os.Stderr, "risper benchmark:", err)
 	return 1
 }
+
+// Codex gpt-5.6-sol, xhigh, prompted by Robert Kirby

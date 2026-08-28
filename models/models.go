@@ -25,16 +25,32 @@ const DefaultModels = `# Risper model profiles.
 #
 # An optional ` + "`prompt`" + ` biases decoding toward the words it lists (proper nouns,
 # names, jargon). It is rendered into the command's {prompt} placeholder. Keep it
-# a short comma list, not a paragraph. Only whisper.cpp uses it.
+# a short comma list, not a paragraph. Local engines and supported cloud engines
+# may use it.
+#
+# Cloud transcription is opt-in. The engine implementation reads the key file
+# locally and sends the audio to OpenAI; it does not make OpenAI the default.
+# [models.openai-gpt-transcribe]
+# engine = "openai"
+# model = "gpt-transcribe"
+# language = "en"
+# api_key_file = "~/.config/openai/key"
+# prompt = "A short comma-separated list of names and terms to recognize."
+#
+# Keep the key file outside this registry, mode 0600, and never commit it.
+# See README.md and docs/models.md for the opt-in privacy and cost trade-off.
+#
+# Codex gpt-5.6-sol, xhigh, prompted by Robert Kirby
 `
 
 type Profile struct {
-	ID       string
-	Engine   string
-	Model    string
-	Language string
-	Command  string
-	Prompt   string
+	ID         string
+	Engine     string
+	Model      string
+	Language   string
+	Command    string
+	Prompt     string
+	APIKeyFile string
 }
 
 func EnsureFile(cfg config.Config) error {
@@ -66,7 +82,11 @@ func Load(cfg config.Config) (map[string]Profile, error) {
 				continue
 			}
 			command := strings.TrimSpace(valueString(data["command"]))
-			if command == "" {
+			engine := valueString(data["engine"])
+			if engine == "" {
+				engine = "external"
+			}
+			if command == "" && engine != "openai" {
 				continue
 			}
 			language := valueString(data["language"])
@@ -77,17 +97,18 @@ func Load(cfg config.Config) (map[string]Profile, error) {
 			if model == "" {
 				model = profileID
 			}
-			engine := valueString(data["engine"])
-			if engine == "" {
-				engine = "external"
+			apiKeyFile := strings.TrimSpace(valueString(data["api_key_file"]))
+			if engine == "openai" && apiKeyFile == "" {
+				apiKeyFile = "~/.config/openai/key"
 			}
 			profiles[profileID] = Profile{
-				ID:       profileID,
-				Engine:   engine,
-				Model:    model,
-				Language: language,
-				Command:  command,
-				Prompt:   valueString(data["prompt"]),
+				ID:         profileID,
+				Engine:     engine,
+				Model:      model,
+				Language:   language,
+				Command:    command,
+				Prompt:     valueString(data["prompt"]),
+				APIKeyFile: apiKeyFile,
 			}
 		}
 	}
@@ -154,9 +175,18 @@ func Write(cfg config.Config, profile Profile, selectProfile bool) error {
 		output.WriteString(strconv.Quote(item.Model))
 		output.WriteString("\nlanguage = ")
 		output.WriteString(strconv.Quote(item.Language))
-		output.WriteString("\ncommand = ")
-		output.WriteString(strconv.Quote(item.Command))
-		output.WriteString("\n")
+		if item.Command != "" {
+			output.WriteString("\ncommand = ")
+			output.WriteString(strconv.Quote(item.Command))
+			output.WriteString("\n")
+		} else {
+			output.WriteString("\n")
+		}
+		if item.APIKeyFile != "" {
+			output.WriteString("api_key_file = ")
+			output.WriteString(strconv.Quote(item.APIKeyFile))
+			output.WriteString("\n")
+		}
 		if item.Prompt != "" {
 			output.WriteString("prompt = ")
 			output.WriteString(strconv.Quote(item.Prompt))
@@ -191,3 +221,5 @@ func valueString(value any) string {
 	}
 	return fmt.Sprint(value)
 }
+
+// Codex gpt-5.6-sol, xhigh, prompted by Robert Kirby
