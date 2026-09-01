@@ -8,7 +8,7 @@ go test ./...
 ./scripts/mutation-smoke.sh
 ```
 
-`go test ./...` includes the recording/transcription cycle and command tests. The functional tests put temporary stubs for `pw-record`, `ffmpeg`, `whisper-cli`, `wl-copy`, `notify-send`, and `canberra-gtk-play` on `PATH`. They do not read or write the live sessions under `~/.local/share/risper/sessions`.
+`go test ./...` includes the recording/transcription cycle and command tests. The functional tests put temporary stubs for `pw-record`, `ffmpeg`, `whisper-cli`, `wl-copy`, `notify-send`, and `canberra-gtk-play` on `PATH`. They do not read or write the live sessions under `~/.local/share/risper/sessions`. Local HTTP servers cover OpenAI success, timeout, HTTP failure, fallback, and transcript-storage boundaries; temporary metadata trees cover malformed history and Monday-start spend windows.
 
 The mutation smoke copies the repository, deliberately breaks selected-model resolution, and expects the Go tests to fail.
 
@@ -59,6 +59,8 @@ Expected:
 - Metadata becomes `complete` after successful transcription and clipboard copy.
 - `transcript.raw.txt` and `transcript.clean.txt` are created.
 - `events.jsonl` records recorder, transcription, clipboard, and paste boundaries without transcript text.
+- The completion popup shows estimated OpenAI spend for today, this week, and
+  this month in the configured billing currency.
 - Audio remains available if transcription fails.
 - Recording-start, transcription-start, success/error notifications and sounds are attempted; stopping moves directly into transcription rather than showing a separate stop notification.
 - A transcription-start notification appears after stopping recording.
@@ -130,8 +132,9 @@ Still environment-limited:
 ## Optional OpenAI profile check
 
 Live cloud calls are not part of the automated test suite; local HTTP test
-servers cover request formatting, key handling, response validation, and
-timeouts. If Rob enables the commented OpenAI profile in `models.toml`, first
+servers cover request formatting, key handling, response validation, bounded
+fallback, and timeouts. If Rob enables the commented OpenAI profile in
+`models.toml`, first
 verify that
 `~/.config/openai/key` is mode `0600`, belongs to the intended OpenAI project
 and organisation, and is not copied into the registry or a command line. Use a
@@ -147,5 +150,12 @@ Check the resulting transcript and session timing, then select the local
 profile again when finished. Voice triggers remain local-only and require the
 `whispercpp-base-en` profile. The API request/response contract is documented
 in the [OpenAI transcription API reference](https://developers.openai.com/api/reference/resources/audio/subresources/transcriptions/methods/create).
+
+For a manual fallback check, keep the selected OpenAI profile but temporarily
+name a non-existent key file, complete a short non-confidential dictation, then
+restore the key path. The popup should report the local profile, the session
+should finish `complete`, and `events.jsonl` should contain
+`transcription.fallback`. Do not remove or alter the real key file for this
+check.
 
 Codex gpt-5.6-sol, xhigh, prompted by Robert Kirby

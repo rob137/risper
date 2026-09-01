@@ -17,6 +17,7 @@ import (
 	"github.com/rob137/risper/internal/args"
 	"github.com/rob137/risper/models"
 	"github.com/rob137/risper/session"
+	"github.com/rob137/risper/spend"
 	"github.com/rob137/risper/transcription"
 )
 
@@ -58,7 +59,15 @@ func Main(argv []string) int {
 	if err != nil {
 		return failSession(cfg, metadata, err)
 	}
-	return run(cfg, metadata, profile, audioPath)
+	profiles, err := models.Load(cfg)
+	if err != nil {
+		return failSession(cfg, metadata, err)
+	}
+	fallback, err := models.SelectFallback(profile, profiles, cfg.VoiceTriggerProfile)
+	if err != nil {
+		return failSession(cfg, metadata, err)
+	}
+	return run(cfg, metadata, profile, fallback, audioPath)
 }
 
 func selectedAudioPath(metadata *session.Metadata) string {
@@ -70,7 +79,7 @@ func selectedAudioPath(metadata *session.Metadata) string {
 	return metadata.AudioPath
 }
 
-func run(cfg config.Config, metadata *session.Metadata, profile models.Profile, audioPath string) int {
+func run(cfg config.Config, metadata *session.Metadata, profile, fallback models.Profile, audioPath string) int {
 	dir := session.SessionDir(metadata)
 	metadata.Status = "transcribing"
 	metadata.TranscriptionEngine = profile.Engine
@@ -90,19 +99,51 @@ func run(cfg config.Config, metadata *session.Metadata, profile models.Profile, 
 		return failSession(cfg, metadata, err)
 	}
 	defer transcription.Finish(cfg)
-	transcript, err := transcription.Transcribe(
-		profile,
-		audioPath,
-		metadata.TranscriptRawPath,
-		metadata.TranscriptCleanPath,
-		func(pid int) error { return transcription.SetWorkerPID(cfg, pid) },
-	)
+	onProcessStart := func(pid int) error {
+		if err := transcription.SetWorkerPID(cfg, pid); err != nil {
+			return err
+		}
+		if fallback.ID != "" {
+			desktop.Notify(cfg, "📝 Retranscribing speech", "OpenAI unavailable; using "+fallback.ID+" locally.")
+		}
+		return nil
+	}
+	result := transcription.TranscriptionResult{Profile: profile}
+	var err error
+	if fallback.ID != "" {
+		result, err = transcription.TranscribeWithFallback(
+			profile, fallback, audioPath, metadata.TranscriptRawPath, metadata.TranscriptCleanPath,
+			time.Duration(profile.FallbackTimeoutSeconds)*time.Second, onProcessStart,
+		)
+	} else {
+		result.Transcript, err = transcription.Transcribe(
+			profile, audioPath, metadata.TranscriptRawPath, metadata.TranscriptCleanPath, onProcessStart,
+		)
+	}
 	if err != nil {
 		return failSession(cfg, metadata, fmt.Errorf("retranscription failed: %w", err))
+	}
+	transcript := result.Transcript
+	actualProfile := result.Profile
+	metadata.TranscriptionEngine = actualProfile.Engine
+	metadata.Model = actualProfile.Model
+	metadata.Language = actualProfile.Language
+	spend.RecordEstimate(metadata, actualProfile.Engine, actualProfile.BillingPricePerMinute, actualProfile.BillingCurrency)
+	if result.PrimaryError != nil {
+		fallbackMessage := fmt.Sprintf("OpenAI profile %s unavailable; used local profile %s: %v", profile.ID, actualProfile.ID, result.PrimaryError)
+		_ = appendLog(filepath.Join(dir, session.StatusLogFile), fallbackMessage)
+		_, _ = events.Append(dir, "retranscription.fallback", map[string]any{
+			"from_profile": profile.ID, "from_engine": profile.Engine,
+			"to_profile": actualProfile.ID, "to_engine": actualProfile.Engine,
+			"reason": result.PrimaryError.Error(),
+		})
 	}
 	_, _ = events.Append(dir, "retranscription.completed", map[string]any{
 		"raw_path": metadata.TranscriptRawPath, "clean_path": metadata.TranscriptCleanPath,
 		"transcript_chars": len([]rune(transcript)), "audio_source": "mixed",
+		"profile": actualProfile.ID, "engine": actualProfile.Engine,
+		"model": actualProfile.Model, "requested_profile": profile.ID,
+		"used_fallback": result.PrimaryError != nil,
 	})
 
 	copied, clipboardMessage := desktop.CopyText(transcript)
@@ -176,3 +217,5 @@ func reportError(err error) int {
 	fmt.Fprintln(os.Stderr, "risper retranscribe:", err)
 	return 1
 }
+
+// Codex gpt-5.6-sol, xhigh, prompted by Robert Kirby

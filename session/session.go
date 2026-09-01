@@ -28,28 +28,31 @@ const (
 )
 
 type Metadata struct {
-	AudioPath            string                     `json:"audio_path"`
-	AudioSources         []string                   `json:"audio_sources,omitempty"`
-	AudioSourcePaths     map[string]string          `json:"audio_source_paths,omitempty"`
-	AudioPrunedAt        *string                    `json:"audio_pruned_at,omitempty"`
-	DurationSeconds      *float64                   `json:"duration_seconds"`
-	EndedAt              *string                    `json:"ended_at"`
-	Errors               []string                   `json:"errors"`
-	Language             string                     `json:"language"`
-	Model                string                     `json:"model"`
-	PasteAttempted       *bool                      `json:"paste_attempted,omitempty"`
-	PasteConfirmation    string                     `json:"paste_confirmation,omitempty"`
-	PasteHelperSucceeded *bool                      `json:"paste_helper_succeeded,omitempty"`
-	PasteSucceeded       *bool                      `json:"paste_succeeded,omitempty"`
-	SessionID            string                     `json:"session_id"`
-	SessionType          string                     `json:"session_type"`
-	StartedAt            string                     `json:"started_at"`
-	Status               string                     `json:"status"`
-	TargetApp            *string                    `json:"target_app"`
-	TranscriptCleanPath  string                     `json:"transcript_clean_path"`
-	TranscriptRawPath    string                     `json:"transcript_raw_path"`
-	TranscriptionEngine  string                     `json:"transcription_engine"`
-	Extra                map[string]json.RawMessage `json:"-"`
+	AudioPath                  string                     `json:"audio_path"`
+	AudioSources               []string                   `json:"audio_sources,omitempty"`
+	AudioSourcePaths           map[string]string          `json:"audio_source_paths,omitempty"`
+	AudioPrunedAt              *string                    `json:"audio_pruned_at,omitempty"`
+	DurationSeconds            *float64                   `json:"duration_seconds"`
+	EndedAt                    *string                    `json:"ended_at"`
+	Errors                     []string                   `json:"errors"`
+	Language                   string                     `json:"language"`
+	Model                      string                     `json:"model"`
+	PasteAttempted             *bool                      `json:"paste_attempted,omitempty"`
+	PasteConfirmation          string                     `json:"paste_confirmation,omitempty"`
+	PasteHelperSucceeded       *bool                      `json:"paste_helper_succeeded,omitempty"`
+	PasteSucceeded             *bool                      `json:"paste_succeeded,omitempty"`
+	SessionID                  string                     `json:"session_id"`
+	SessionType                string                     `json:"session_type"`
+	StartedAt                  string                     `json:"started_at"`
+	Status                     string                     `json:"status"`
+	TargetApp                  *string                    `json:"target_app"`
+	TranscriptCleanPath        string                     `json:"transcript_clean_path"`
+	TranscriptRawPath          string                     `json:"transcript_raw_path"`
+	TranscriptionCost          *float64                   `json:"transcription_cost,omitempty"`
+	TranscriptionEngine        string                     `json:"transcription_engine"`
+	TranscriptionCurrency      string                     `json:"transcription_currency,omitempty"`
+	TranscriptionRatePerMinute *float64                   `json:"transcription_rate_per_minute,omitempty"`
+	Extra                      map[string]json.RawMessage `json:"-"`
 }
 
 func boolPtr(value bool) *bool { return &value }
@@ -59,7 +62,7 @@ var knownMetadataKeys = map[string]struct{}{
 	"errors": {}, "language": {}, "model": {}, "paste_attempted": {}, "paste_confirmation": {},
 	"paste_helper_succeeded": {}, "paste_succeeded": {}, "session_id": {}, "session_type": {},
 	"started_at": {}, "status": {}, "target_app": {}, "transcript_clean_path": {}, "transcript_raw_path": {},
-	"transcription_engine": {},
+	"transcription_cost": {}, "transcription_currency": {}, "transcription_engine": {}, "transcription_rate_per_minute": {},
 }
 
 func (metadata *Metadata) UnmarshalJSON(data []byte) error {
@@ -349,3 +352,5 @@ func MarkIncompleteRecordingsRecoveredAt(cfg config.Config, now time.Time) (int,
 }
 
 func RecoveryMessage() string { return recoveryMessage }
+
+// Codex gpt-5.6-sol, xhigh, prompted by Robert Kirby

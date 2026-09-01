@@ -41,6 +41,10 @@ engine = "openai"
 model = "gpt-transcribe"
 language = "en"
 api_key_file = "~/.config/openai/key"
+billing_price_per_minute = 0.0045
+billing_currency = "USD"
+fallback_profile = "whispercpp-small-en"
+fallback_timeout_seconds = 15
 prompt = "A short comma-separated list of names and terms to recognize."
 ```
 
@@ -51,6 +55,24 @@ never commit it. Verify which OpenAI project and organisation the key belongs
 to before use. Audio and the profile prompt leave the machine, and requests
 are chargeable; cloud transcription is deliberately never selected by the
 generated defaults.
+
+The transcription endpoint does not return a model's price per minute. Risper
+therefore reads `billing_price_per_minute` and `billing_currency` from the
+profile, stores a snapshot on each newly completed OpenAI session, and labels
+the popup totals as estimates. The known `gpt-transcribe` model defaults to the
+published USD 0.0045/minute price checked on 2026-09-01 so existing registries
+need no migration. Set both fields explicitly to override that assumption.
+Historical currencies remain separate; Risper does not invent an exchange
+rate.
+
+An OpenAI profile may name a `whisper.cpp` `fallback_profile` and set the
+positive `fallback_timeout_seconds` allowed for the cloud attempt. The default
+budget is 15 seconds. Without an explicit fallback, selection prefers the
+canonical `whispercpp-small-en` profile, another configured `small.en` profile,
+the configured voice-trigger profile, then the first whisper.cpp profile in
+sorted order. Explicit missing or non-local fallbacks are configuration errors.
+Fallback covers key, transport, HTTP, timeout, and response failures; it does
+not rerun missing input audio or a local transcript-write failure.
 
 Placeholders:
 
@@ -71,7 +93,8 @@ Backend contract:
   service if the user explicitly chooses that profile.
 - The command may print transcript text to stdout.
 - Or it may write `{raw}` / `{clean}` itself.
-- Risper stores the selected engine, model, and language in session metadata.
+- Risper stores the engine, model, and language that actually produced the
+  transcript in session metadata.
 - The recorder, daemon, history, and paste layers should not need edits for a new backend.
 
 The `prompt` field is intended for short vocabulary guidance such as proper

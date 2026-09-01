@@ -156,6 +156,10 @@ engine = "openai"
 model = "gpt-transcribe"
 language = "en"
 api_key_file = "~/.config/openai/key"
+billing_price_per_minute = 0.0045
+billing_currency = "USD"
+fallback_profile = "whispercpp-small-en"
+fallback_timeout_seconds = 15
 prompt = "A short comma-separated list of names and terms to recognize."
 ```
 
@@ -165,10 +169,33 @@ locally; do not put the key itself in TOML, an environment dump, or a command
 line. The endpoint accepts multipart audio, model, language, and prompt fields
 and returns transcript text in its response; see the [OpenAI transcription API
 reference](https://developers.openai.com/api/reference/resources/audio/subresources/transcriptions/methods/create).
-The `gpt-transcribe` model's current published price is listed in the [OpenAI
-model documentation](https://developers.openai.com/api/docs/models/gpt-transcribe)
-and can change, so check it before deciding whether the latency is worth the
-cost.
+The transcription response does not supply the price per minute, so Risper
+cannot discover it from the API. `billing_price_per_minute` and
+`billing_currency` are the rate used for the completion-popup estimate. The
+known `gpt-transcribe` profile defaults to the published USD 0.0045/minute
+rate checked on 2026-09-01, which keeps existing registries working, but an
+explicit profile value wins when pricing or billing currency changes. The
+current published price remains available in the [OpenAI model
+documentation](https://developers.openai.com/api/docs/models/gpt-transcribe).
+
+Every pasted, copied, or paste-unavailable completion popup shows estimated
+OpenAI spend for today, the current Monday-start week, and the current calendar
+month. New cloud sessions snapshot their rate, currency, and estimated cost in
+`metadata.json`; older `gpt-transcribe` sessions use the current profile rate.
+Malformed, incomplete, future-dated, and non-OpenAI sessions are ignored.
+Currencies are reported separately and never converted. This is visibility
+from Risper's durable session history, not an authoritative account invoice.
+
+When an OpenAI request, key, response, or short cloud attempt fails, Risper
+uses the configured whisper.cpp fallback and keeps the transcript workflow
+moving. `fallback_timeout_seconds` bounds the cloud part at 15 seconds by
+default before local work begins; it does not add a retry. If
+`fallback_profile` is omitted, Risper prefers `whispercpp-small-en`, then any
+configured `small.en` profile, the local voice-trigger profile, and finally a
+deterministically selected whisper.cpp profile. Missing input audio and local
+transcript-storage errors are not retried because another engine cannot repair
+them. Session metadata and events record the engine that actually produced the
+transcript, and the popup says when local fallback was used.
 
 OpenAI's current data-control documentation says API inputs are not used to
 train models unless the account opts in, and lists no abuse-monitoring or

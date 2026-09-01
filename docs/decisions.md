@@ -98,3 +98,12 @@ capture-time `--system` choice and its deletion of the source files.
 
 - Paste-only completion keeps the active theme's `complete` event. Paste-and-send uses the same event as both inputs to the selected rising-pair recipe: a perfect-fifth `rubberband` copy delayed 170ms, mixed with the original, and limited to 0.95. This makes the distinction a one-note versus two-note count in the same sound family.
 - The derived send sound is generated on first use under Risper's local data directory (`~/.local/share/risper/`) and never committed. The cache identity includes the resolved active-theme source path and file metadata, so changing themes causes a new local derivative and does not keep playing a Yaru-derived file. Missing theme resolution, `ffmpeg`, `rubberband`, or any generation error falls back to the single `complete` event.
+
+## 2026-09-01 Visible cloud spend and bounded local fallback
+
+- Completion notifications show estimated OpenAI spend for the local day, the Monday-start week, and the calendar month. The durable metadata store is the source because transcripts and metadata outlive seven-day audio retention; damaged, incomplete, future, and non-cloud sessions are skipped so one bad directory cannot break dictation.
+- Pricing is profile policy, not API discovery: the transcription response does not expose the per-minute billing rate. New cloud sessions snapshot rate, currency, and estimated cost, while legacy sessions use a model-matched current rate. Currency totals are kept separate and never converted. The known `gpt-transcribe` default is USD 0.0045/minute, verified against the published model page on 2026-09-01, and explicit profile values override it.
+- An unavailable OpenAI path falls back once to configured whisper.cpp. The cloud attempt is bounded to 15 seconds by default when a fallback exists, avoiding the previous two-minute wait before local work. The higher-accuracy `small.en` profile is preferred for completed dictation; the voice-trigger profile and other whisper.cpp profiles remain deterministic later choices.
+- Key, transport, timeout, HTTP, and malformed-response failures are fallback-eligible. Missing audio and transcript-storage failures are not, because rerunning another engine cannot repair them. Metadata and events record the engine that produced the text, and the popup reports fallback without turning a recovered transcript into a warning outcome.
+
+Codex gpt-5.6-sol, xhigh, prompted by Robert Kirby

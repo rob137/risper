@@ -263,6 +263,66 @@ func TestToggleRunsRealRecordMixTranscribeClipboardCycle(t *testing.T) {
 	}
 }
 
+func TestToggleFallsBackToLocalWhisperAndRecordsActualEngine(t *testing.T) {
+	root, cfg := stubEnvironment(t)
+	if err := config.UpdateConfigValueAt(cfg.ConfigPath, "selected_model", "cloud"); err != nil {
+		t.Fatal(err)
+	}
+	modelsText := `[models.cloud]
+engine = "openai"
+model = "gpt-transcribe"
+language = "en"
+api_key_file = "` + filepath.Join(root, "missing-openai-key") + `"
+fallback_profile = "whispercpp-small-en"
+fallback_timeout_seconds = 1
+
+[models.whispercpp-small-en]
+engine = "whisper.cpp"
+model = "small.en"
+language = "en"
+command = "whisper-cli -f {audio} -nt -otxt -of {raw_no_txt}"
+`
+	if err := os.WriteFile(cfg.ModelsPath, []byte(modelsText), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	if code := Main(nil); code != 0 {
+		t.Fatalf("start returned %d", code)
+	}
+	if code := Main(nil); code != 0 {
+		t.Fatalf("fallback stop returned %d", code)
+	}
+	last, err := session.Last(cfg)
+	if err != nil || last == nil {
+		t.Fatalf("session = %#v, %v", last, err)
+	}
+	if last.Status != "complete" || last.TranscriptionEngine != "whisper.cpp" || last.Model != "small.en" {
+		t.Fatalf("fallback metadata = %#v", last)
+	}
+	if last.TranscriptionCost != nil || last.TranscriptionRatePerMinute != nil || last.TranscriptionCurrency != "" {
+		t.Fatalf("local fallback recorded OpenAI spend = %#v", last)
+	}
+	notifications := readFile(t, filepath.Join(root, "notify.log"))
+	for _, want := range []string{"OpenAI unavailable; using whispercpp-small-en locally", "Used whispercpp-small-en locally", "Estimated OpenAI spend: USD 0.0000 today"} {
+		if !strings.Contains(notifications, want) {
+			t.Fatalf("notifications omitted %q: %s", want, notifications)
+		}
+	}
+	records, err := events.Read(session.SessionDir(last), 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	foundFallback := false
+	for _, record := range records {
+		if record["event"] == "transcription.fallback" && record["to_profile"] == "whispercpp-small-en" {
+			foundFallback = true
+		}
+	}
+	if !foundFallback {
+		t.Fatalf("fallback event missing: %#v", records)
+	}
+}
+
 func TestTogglePastesAndSubmitsWhenAsked(t *testing.T) {
 	root, cfg := stubEnvironment(t)
 	if code := Main(nil); code != 0 {
@@ -463,3 +523,5 @@ func assertAudioFiles(t *testing.T, metadata *session.Metadata) {
 		t.Fatalf("mixed audio path %s: %v", metadata.AudioPath, err)
 	}
 }
+
+// Codex gpt-5.6-sol, xhigh, prompted by Robert Kirby

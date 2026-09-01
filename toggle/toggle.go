@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
+	"sync"
 	"time"
 
 	"github.com/rob137/risper/config"
@@ -15,6 +17,7 @@ import (
 	"github.com/rob137/risper/models"
 	"github.com/rob137/risper/recording"
 	"github.com/rob137/risper/session"
+	"github.com/rob137/risper/spend"
 	"github.com/rob137/risper/transcription"
 	"github.com/rob137/risper/voice"
 )
@@ -37,6 +40,27 @@ type finish struct {
 	paste       bool
 	enter       bool
 	triggerWord string
+}
+
+type progressStatus struct {
+	mu   sync.RWMutex
+	body string
+}
+
+func newProgressStatus(body string) *progressStatus {
+	return &progressStatus{body: body}
+}
+
+func (status *progressStatus) Set(body string) {
+	status.mu.Lock()
+	defer status.mu.Unlock()
+	status.body = body
+}
+
+func (status *progressStatus) Body() string {
+	status.mu.RLock()
+	defer status.mu.RUnlock()
+	return status.body
 }
 
 func Main(args []string) int {
@@ -132,6 +156,14 @@ func finishSession(cfg config.Config, metadata *session.Metadata, request finish
 	if err != nil {
 		return transcriptionFailure(cfg, metadata, err)
 	}
+	profiles, err := models.Load(cfg)
+	if err != nil {
+		return transcriptionFailure(cfg, metadata, err)
+	}
+	fallback, err := models.SelectFallback(profile, profiles, cfg.VoiceTriggerProfile)
+	if err != nil {
+		return transcriptionFailure(cfg, metadata, err)
+	}
 	audioPath := metadata.AudioPath
 	audioSource := recording.Mixed
 	if info, err := os.Stat(audioPath); err != nil {
@@ -159,6 +191,7 @@ func finishSession(cfg config.Config, metadata *session.Metadata, request finish
 
 	title := "📝 Transcribing speech"
 	body := "Using " + profile.ID + "."
+	progress := newProgressStatus(body)
 	desktop.Notify(cfg, title, body)
 	// The start sound is useful feedback, but waiting for it here puts a
 	// multi-second theme sample between stopping the recording and the
@@ -167,17 +200,56 @@ func finishSession(cfg config.Config, metadata *session.Metadata, request finish
 	transcriptionSound := desktop.PlayAsync(cfg, "transcription_start")
 	defer transcriptionSound.Wait()
 	stopHeartbeat := make(chan struct{})
-	go heartbeat(cfg, title, body, stopHeartbeat)
-	transcript, err := transcription.Transcribe(
-		profile,
-		audioPath,
-		metadata.TranscriptRawPath,
-		metadata.TranscriptCleanPath,
-		func(pid int) error { return transcription.SetWorkerPID(cfg, pid) },
-	)
+	go heartbeat(cfg, title, progress, stopHeartbeat)
+	onProcessStart := func(pid int) error {
+		if err := transcription.SetWorkerPID(cfg, pid); err != nil {
+			return err
+		}
+		if fallback.ID != "" {
+			message := "OpenAI unavailable; using " + fallback.ID + " locally."
+			progress.Set(message)
+			desktop.Notify(cfg, title, message)
+		}
+		return nil
+	}
+	result := transcription.TranscriptionResult{Profile: profile}
+	if fallback.ID != "" {
+		result, err = transcription.TranscribeWithFallback(
+			profile,
+			fallback,
+			audioPath,
+			metadata.TranscriptRawPath,
+			metadata.TranscriptCleanPath,
+			time.Duration(profile.FallbackTimeoutSeconds)*time.Second,
+			onProcessStart,
+		)
+	} else {
+		result.Transcript, err = transcription.Transcribe(
+			profile,
+			audioPath,
+			metadata.TranscriptRawPath,
+			metadata.TranscriptCleanPath,
+			onProcessStart,
+		)
+	}
 	close(stopHeartbeat)
 	if err != nil {
 		return transcriptionFailure(cfg, metadata, err)
+	}
+	transcript := result.Transcript
+	actualProfile := result.Profile
+	metadata.TranscriptionEngine = actualProfile.Engine
+	metadata.Model = actualProfile.Model
+	metadata.Language = actualProfile.Language
+	spend.RecordEstimate(metadata, actualProfile.Engine, actualProfile.BillingPricePerMinute, actualProfile.BillingCurrency)
+	if result.PrimaryError != nil {
+		fallbackMessage := fmt.Sprintf("OpenAI profile %s unavailable; used local profile %s: %v", profile.ID, actualProfile.ID, result.PrimaryError)
+		_ = appendLog(filepath.Join(session.SessionDir(metadata), session.StatusLogFile), fallbackMessage)
+		_, _ = events.Append(session.SessionDir(metadata), "transcription.fallback", map[string]any{
+			"from_profile": profile.ID, "from_engine": profile.Engine,
+			"to_profile": actualProfile.ID, "to_engine": actualProfile.Engine,
+			"reason": result.PrimaryError.Error(),
+		})
 	}
 	if request.triggerWord != "" {
 		transcript = voice.StripTrailingTrigger(transcript, request.triggerWord)
@@ -188,7 +260,11 @@ func finishSession(cfg config.Config, metadata *session.Metadata, request finish
 	_, _ = events.Append(session.SessionDir(metadata), "transcription.completed", map[string]any{
 		"raw_path": metadata.TranscriptRawPath, "clean_path": metadata.TranscriptCleanPath,
 		"transcript_chars": len([]rune(transcript)), "audio_source": audioSource,
-		"voice_trigger": request.triggerWord,
+		"voice_trigger": request.triggerWord, "profile": actualProfile.ID,
+		"engine": actualProfile.Engine, "model": actualProfile.Model,
+		"requested_profile": profile.ID, "used_fallback": result.PrimaryError != nil,
+		"transcription_cost":     metadata.TranscriptionCost,
+		"transcription_currency": metadata.TranscriptionCurrency,
 	})
 
 	copied, clipboardMessage := desktop.CopyText(transcript)
@@ -225,13 +301,12 @@ func finishSession(cfg config.Config, metadata *session.Metadata, request finish
 	if err := session.SaveMetadata(metadata); err != nil {
 		return fail(cfg, err)
 	}
-	if request.paste && pasted {
-		desktop.Notify(cfg, "✅ Risper pasted", "Sent to the focused window; transcript is on the clipboard.")
-	} else if request.paste {
-		desktop.Notify(cfg, "✅ Risper copied", "Paste unavailable; transcript is on the clipboard.")
-	} else {
-		desktop.Notify(cfg, "✅ Risper copied", "Transcript is on the clipboard.")
+	spendLine, spendErr := completionSpendLine(cfg, profiles, time.Now())
+	if spendErr != nil {
+		_ = appendLog(cfg.LogPath, "could not calculate OpenAI spend estimate: "+spendErr.Error())
 	}
+	notificationTitle, notificationBody := completionNotification(request, pasted, result.PrimaryError != nil, actualProfile.ID, spendLine)
+	desktop.Notify(cfg, notificationTitle, notificationBody)
 	if submitted {
 		// The send sound is intentionally fire-and-forget here. The daemon uses
 		// toggle process exit as its in-flight boundary, so waiting for the
@@ -264,7 +339,7 @@ func placeTranscript(cfg config.Config, request finish) (bool, bool, string, str
 	return true, true, message + "; " + enterMessage, "helper_ran_target_unverified"
 }
 
-func heartbeat(cfg config.Config, title, body string, stop <-chan struct{}) {
+func heartbeat(cfg config.Config, title string, status *progressStatus, stop <-chan struct{}) {
 	ticker := time.NewTicker(5 * time.Second)
 	defer ticker.Stop()
 	started := time.Now()
@@ -272,12 +347,31 @@ func heartbeat(cfg config.Config, title, body string, stop <-chan struct{}) {
 		select {
 		case <-ticker.C:
 			elapsed := int(time.Since(started).Seconds())
-			desktop.Notify(cfg, title, fmt.Sprintf("%s %ds elapsed.", body, elapsed))
+			desktop.Notify(cfg, title, fmt.Sprintf("%s %ds elapsed.", status.Body(), elapsed))
 			desktop.Play(cfg, "transcription_progress")
 		case <-stop:
 			return
 		}
 	}
+}
+
+func completionNotification(request finish, pasted, usedFallback bool, fallbackProfile, spendLine string) (string, string) {
+	title := "✅ Risper copied"
+	body := "Transcript is on the clipboard."
+	if request.paste && pasted {
+		title = "✅ Risper pasted"
+		body = "Sent to the focused window; transcript is on the clipboard."
+	} else if request.paste {
+		body = "Paste unavailable; transcript is on the clipboard."
+	}
+	details := []string{body}
+	if usedFallback {
+		details = append(details, "Used "+fallbackProfile+" locally after OpenAI was unavailable.")
+	}
+	if spendLine != "" {
+		details = append(details, spendLine)
+	}
+	return title, strings.Join(details, "\n")
 }
 
 func transcriptionFailure(cfg config.Config, metadata *session.Metadata, err error) int {
@@ -310,3 +404,5 @@ func appendLog(path, message string) error {
 	_, err = fmt.Fprintf(handle, "%s %s\n", time.Now().Format(time.RFC3339), message)
 	return err
 }
+
+// Codex gpt-5.6-sol, xhigh, prompted by Robert Kirby

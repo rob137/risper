@@ -28,44 +28,93 @@ var (
 	openAIRequestTimeout = 2 * time.Minute
 )
 
+// openAIInputError marks a failure reading the recording itself. A fallback
+// engine cannot make an unavailable recording available, so callers should
+// report this error without starting another transcription process.
+type openAIInputError struct {
+	err error
+}
+
+func (err *openAIInputError) Error() string { return err.err.Error() }
+func (err *openAIInputError) Unwrap() error { return err.err }
+
+// transcriptWriteError marks a failure after a transcript has been received.
+// Retrying with another engine could overwrite useful diagnostics or hide a
+// storage problem, so this error is deliberately not fallback-eligible.
+type transcriptWriteError struct {
+	err error
+}
+
+func (err *transcriptWriteError) Error() string { return err.err.Error() }
+func (err *transcriptWriteError) Unwrap() error { return err.err }
+
 // transcribeOpenAI streams the audio into the multipart request. The API key
 // is read only into memory and is never put in a profile command, URL, or
 // child-process environment.
 func transcribeOpenAI(profile models.Profile, audioPath, rawPath, cleanPath string) (string, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), openAIRequestTimeout)
+	defer cancel()
+	return transcribeOpenAIContext(ctx, profile, audioPath, rawPath, cleanPath)
+}
+
+func transcribeOpenAIContext(ctx context.Context, profile models.Profile, audioPath, rawPath, cleanPath string) (string, error) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
 	key, err := readOpenAIKey(profile.APIKeyFile)
 	if err != nil {
 		return "", err
 	}
 	audio, err := os.Open(audioPath)
 	if err != nil {
-		return "", fmt.Errorf("open audio for OpenAI transcription: %w", err)
+		return "", &openAIInputError{err: fmt.Errorf("open audio for OpenAI transcription: %w", err)}
 	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), openAIRequestTimeout)
-	defer cancel()
 
 	reader, writer := io.Pipe()
 	form := multipart.NewWriter(writer)
-	go writeOpenAIMultipart(form, writer, audio, audioPath, profile)
+	multipartDone := make(chan error, 1)
+	go func() {
+		multipartDone <- writeOpenAIMultipart(form, writer, audio, audioPath, profile)
+	}()
+	stopMultipart := func(cause error) error {
+		if cause != nil {
+			_ = reader.CloseWithError(cause)
+		} else {
+			_ = reader.Close()
+		}
+		return <-multipartDone
+	}
 
 	request, err := http.NewRequestWithContext(ctx, http.MethodPost, openAIEndpoint, reader)
 	if err != nil {
-		_ = reader.CloseWithError(err)
+		multipartErr := stopMultipart(err)
+		var inputErr *openAIInputError
+		if errors.As(multipartErr, &inputErr) {
+			return "", inputErr
+		}
 		return "", fmt.Errorf("create OpenAI transcription request: %w", err)
 	}
 	request.Header.Set("Authorization", "Bearer "+key)
 	request.Header.Set("Content-Type", form.FormDataContentType())
 
-	response, err := (&http.Client{Timeout: openAIRequestTimeout}).Do(request)
+	response, err := (&http.Client{}).Do(request)
 	if err != nil {
 		// A timeout or transport failure can happen while the multipart writer
 		// is blocked on the pipe. Closing the reader releases that goroutine.
-		_ = reader.CloseWithError(err)
+		multipartErr := stopMultipart(err)
+		var inputErr *openAIInputError
+		if errors.As(multipartErr, &inputErr) {
+			return "", inputErr
+		}
 		return "", fmt.Errorf("OpenAI transcription request failed: %w", err)
 	}
-	defer reader.Close()
 	defer response.Body.Close()
 	body, err := readOpenAIBody(response.Body)
+	multipartErr := stopMultipart(nil)
+	var inputErr *openAIInputError
+	if errors.As(multipartErr, &inputErr) {
+		return "", inputErr
+	}
 	if err != nil {
 		return "", err
 	}
@@ -84,16 +133,22 @@ func transcribeOpenAI(profile models.Profile, audioPath, rawPath, cleanPath stri
 		return "", ErrNoTranscript{}
 	}
 	if err := writeTranscript(rawPath, cleanPath, text); err != nil {
-		return "", err
+		return "", &transcriptWriteError{err: err}
 	}
 	return text, nil
 }
 
-func writeOpenAIMultipart(form *multipart.Writer, pipe *io.PipeWriter, audio *os.File, audioPath string, profile models.Profile) {
+func writeOpenAIMultipart(form *multipart.Writer, pipe *io.PipeWriter, audio *os.File, audioPath string, profile models.Profile) error {
 	defer audio.Close()
 	part, err := form.CreateFormFile("file", filepath.Base(audioPath))
 	if err == nil {
-		_, err = io.Copy(part, audio)
+		if _, copyErr := io.Copy(part, audio); copyErr != nil {
+			if errors.Is(copyErr, io.ErrClosedPipe) {
+				err = copyErr
+			} else {
+				err = &openAIInputError{err: fmt.Errorf("read audio for OpenAI transcription: %w", copyErr)}
+			}
+		}
 	}
 	if err == nil {
 		err = form.WriteField("model", profile.Model)
@@ -112,9 +167,9 @@ func writeOpenAIMultipart(form *multipart.Writer, pipe *io.PipeWriter, audio *os
 	}
 	if err != nil {
 		_ = pipe.CloseWithError(err)
-		return
+		return err
 	}
-	_ = pipe.Close()
+	return pipe.Close()
 }
 
 func readOpenAIKey(path string) (string, error) {

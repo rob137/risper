@@ -107,6 +107,40 @@ func TestRewritePreservesUnknownAndOptionalMetadataKeys(t *testing.T) {
 	}
 }
 
+func TestRewritePreservesRecordedTranscriptionCostAndRate(t *testing.T) {
+	cfg := testConfig(t)
+	dir := filepath.Join(cfg.SessionsDir, "priced")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	metadataJSON := `{"audio_path":"` + filepath.Join(dir, "audio.wav") + `","duration_seconds":60,"ended_at":"2026-08-19T10:01:00Z","errors":[],"language":"en","model":"gpt-transcribe","session_id":"priced","session_type":"wayland","started_at":"2026-08-19T10:00:00Z","status":"complete","target_app":null,"transcript_clean_path":"` + filepath.Join(dir, "transcript.clean.txt") + `","transcript_raw_path":"` + filepath.Join(dir, "transcript.raw.txt") + `","transcription_engine":"openai","transcription_cost":0.0125,"transcription_currency":"USD","transcription_rate_per_minute":0.0125,"future_key":{"kept":true}}`
+	if err := os.WriteFile(filepath.Join(dir, "metadata.json"), []byte(metadataJSON), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	metadata, err := LoadSession(dir)
+	if err != nil || metadata == nil {
+		t.Fatalf("load priced metadata = %#v, %v", metadata, err)
+	}
+	if metadata.TranscriptionCost == nil || *metadata.TranscriptionCost != 0.0125 || metadata.TranscriptionCurrency != "USD" || metadata.TranscriptionRatePerMinute == nil || *metadata.TranscriptionRatePerMinute != 0.0125 {
+		t.Fatalf("recorded pricing fields = %#v", metadata)
+	}
+	metadata.Status = "complete"
+	if err := SaveMetadata(metadata); err != nil {
+		t.Fatal(err)
+	}
+	var persisted map[string]any
+	data, _ := os.ReadFile(filepath.Join(dir, "metadata.json"))
+	if err := json.Unmarshal(data, &persisted); err != nil {
+		t.Fatal(err)
+	}
+	if persisted["transcription_cost"] != 0.0125 || persisted["transcription_currency"] != "USD" || persisted["transcription_rate_per_minute"] != 0.0125 {
+		t.Fatalf("pricing fields were not persisted: %#v", persisted)
+	}
+	if persisted["future_key"].(map[string]any)["kept"] != true {
+		t.Fatalf("unknown key was lost: %#v", persisted)
+	}
+}
+
 func TestPruneAndRecover(t *testing.T) {
 	cfg := testConfig(t)
 	retention := 3600.0
@@ -174,3 +208,5 @@ func TestPruneAndRecover(t *testing.T) {
 		t.Fatalf("recovered metadata = %#v, %v", reloaded, err)
 	}
 }
+
+// Codex gpt-5.6-sol, xhigh, prompted by Robert Kirby

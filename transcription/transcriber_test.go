@@ -1,12 +1,17 @@
 package transcription
 
 import (
+	"context"
 	"errors"
+	"fmt"
+	"io"
+	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/rob137/risper/models"
 )
@@ -219,3 +224,191 @@ func TestReadTranscriptTrimsTextAndRejectsEmptyFiles(t *testing.T) {
 		t.Fatalf("read transcript = %q, %v", text, ok)
 	}
 }
+
+func TestTranscribeWithFallbackUsesLocalAfterFastCloudTimeout(t *testing.T) {
+	keyPath := openAITestKey(t, "test-key", 0o600)
+	root := t.TempDir()
+	audioPath := filepath.Join(root, "clip.wav")
+	rawPath := filepath.Join(root, "raw.txt")
+	cleanPath := filepath.Join(root, "clean.txt")
+	if err := os.WriteFile(audioPath, []byte("audio"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	useOpenAITestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		time.Sleep(200 * time.Millisecond)
+	})
+	local := models.Profile{ID: "local-base", Engine: "whisper.cpp", Command: "printf 'local transcript'"}
+	started := time.Now()
+	result, err := TranscribeWithFallback(
+		models.Profile{ID: "cloud", Engine: "openai", Model: "gpt-transcribe", APIKeyFile: keyPath},
+		local, audioPath, rawPath, cleanPath, 30*time.Millisecond, nil,
+	)
+	if err != nil {
+		t.Fatalf("fallback transcription error = %v", err)
+	}
+	if result.Transcript != "local transcript" || result.Profile.ID != local.ID {
+		t.Fatalf("result = %#v, want local profile and transcript", result)
+	}
+	if result.PrimaryError == nil || !errors.Is(result.PrimaryError, context.DeadlineExceeded) {
+		t.Fatalf("primary error = %v, want deadline exceeded", result.PrimaryError)
+	}
+	if elapsed := time.Since(started); elapsed > time.Second {
+		t.Fatalf("bounded fallback took %s", elapsed)
+	}
+}
+
+func TestTranscribeWithFallbackUsesLocalAfterCloudHTTPError(t *testing.T) {
+	keyPath := openAITestKey(t, "test-key", 0o600)
+	root := t.TempDir()
+	audioPath := filepath.Join(root, "clip.wav")
+	if err := os.WriteFile(audioPath, []byte("audio"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	useOpenAITestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusUnauthorized)
+		_, _ = io.WriteString(w, `{"error":{"message":"bad key"}}`)
+	})
+	local := models.Profile{ID: "local-base", Engine: "whisper.cpp", Command: "printf 'local after auth error'"}
+	result, err := TranscribeWithFallback(
+		models.Profile{ID: "cloud", Engine: "openai", Model: "gpt-transcribe", APIKeyFile: keyPath},
+		local, audioPath, filepath.Join(root, "raw.txt"), filepath.Join(root, "clean.txt"), time.Second, nil,
+	)
+	if err != nil || result.Transcript != "local after auth error" {
+		t.Fatalf("result = %#v, err = %v", result, err)
+	}
+	if result.PrimaryError == nil || !strings.Contains(result.PrimaryError.Error(), "HTTP status 401") {
+		t.Fatalf("primary error = %v, want HTTP 401", result.PrimaryError)
+	}
+}
+
+func TestTranscribeWithFallbackDoesNotUseLocalForInputOpenFailure(t *testing.T) {
+	keyPath := openAITestKey(t, "test-key", 0o600)
+	root := t.TempDir()
+	marker := filepath.Join(root, "fallback-ran")
+	useOpenAITestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		t.Error("OpenAI endpoint was reached despite missing input audio")
+	})
+	local := models.Profile{ID: "local-base", Engine: "whisper.cpp", Command: fmt.Sprintf("printf ran > %s; printf local", shellQuote(marker))}
+	_, err := TranscribeWithFallback(
+		models.Profile{ID: "cloud", Engine: "openai", APIKeyFile: keyPath},
+		local, filepath.Join(root, "missing.wav"), filepath.Join(root, "raw.txt"), filepath.Join(root, "clean.txt"), time.Second, nil,
+	)
+	if err == nil || !strings.Contains(err.Error(), "open audio for transcription fallback") {
+		t.Fatalf("error = %v, want input-open error", err)
+	}
+	if _, statErr := os.Stat(marker); !os.IsNotExist(statErr) {
+		t.Fatalf("local fallback ran: %v", statErr)
+	}
+}
+
+func TestTranscribeWithFallbackDoesNotUseLocalForTranscriptWriteFailure(t *testing.T) {
+	keyPath := openAITestKey(t, "test-key", 0o600)
+	root := t.TempDir()
+	audioPath := filepath.Join(root, "clip.wav")
+	if err := os.WriteFile(audioPath, []byte("audio"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	marker := filepath.Join(root, "fallback-ran")
+	useOpenAITestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		_, _ = io.WriteString(w, `{"text":"cloud transcript"}`)
+	})
+	blockedParent := filepath.Join(root, "not-a-directory")
+	if err := os.WriteFile(blockedParent, []byte("block"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	local := models.Profile{ID: "local-base", Engine: "whisper.cpp", Command: fmt.Sprintf("printf ran > %s; printf local", shellQuote(marker))}
+	_, err := TranscribeWithFallback(
+		models.Profile{ID: "cloud", Engine: "openai", APIKeyFile: keyPath},
+		local, audioPath, filepath.Join(blockedParent, "raw.txt"), filepath.Join(root, "clean.txt"), time.Second, nil,
+	)
+	if err == nil || !strings.Contains(err.Error(), "not-a-directory") {
+		t.Fatalf("error = %v, want transcript storage error", err)
+	}
+	if _, statErr := os.Stat(marker); !os.IsNotExist(statErr) {
+		t.Fatalf("local fallback ran: %v", statErr)
+	}
+}
+
+func TestTranscribeWithFallbackReportsBothFailures(t *testing.T) {
+	keyPath := openAITestKey(t, "test-key", 0o600)
+	root := t.TempDir()
+	audioPath := filepath.Join(root, "clip.wav")
+	if err := os.WriteFile(audioPath, []byte("audio"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	useOpenAITestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusServiceUnavailable)
+		_, _ = io.WriteString(w, `{"error":{"message":"service down"}}`)
+	})
+	local := models.Profile{ID: "local-base", Engine: "whisper.cpp", Command: "printf 'local failed' >&2; exit 9"}
+	_, err := TranscribeWithFallback(
+		models.Profile{ID: "cloud", Engine: "openai", APIKeyFile: keyPath},
+		local, audioPath, filepath.Join(root, "raw.txt"), filepath.Join(root, "clean.txt"), time.Second, nil,
+	)
+	var fallbackErr *TranscriptionFallbackError
+	if !errors.As(err, &fallbackErr) {
+		t.Fatalf("error = %v, want TranscriptionFallbackError", err)
+	}
+	if !strings.Contains(fallbackErr.Primary.Error(), "HTTP status 503") || !strings.Contains(fallbackErr.Fallback.Error(), "local failed") {
+		t.Fatalf("fallback error = %#v", fallbackErr)
+	}
+}
+
+func TestTranscribeWithFallbackSuccessDoesNotStartLocal(t *testing.T) {
+	keyPath := openAITestKey(t, "test-key", 0o600)
+	root := t.TempDir()
+	audioPath := filepath.Join(root, "clip.wav")
+	marker := filepath.Join(root, "fallback-ran")
+	if err := os.WriteFile(audioPath, []byte("audio"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	useOpenAITestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		_, _ = io.WriteString(w, `{"text":"cloud transcript"}`)
+	})
+	local := models.Profile{ID: "local-base", Engine: "whisper.cpp", Command: fmt.Sprintf("printf ran > %s; printf local", shellQuote(marker))}
+	result, err := TranscribeWithFallback(
+		models.Profile{ID: "cloud", Engine: "openai", APIKeyFile: keyPath},
+		local, audioPath, filepath.Join(root, "raw.txt"), filepath.Join(root, "clean.txt"), time.Second, nil,
+	)
+	if err != nil || result.Profile.ID != "cloud" || result.PrimaryError != nil || result.Transcript != "cloud transcript" {
+		t.Fatalf("result = %#v, err = %v", result, err)
+	}
+	if _, statErr := os.Stat(marker); !os.IsNotExist(statErr) {
+		t.Fatalf("local fallback ran after cloud success: %v", statErr)
+	}
+}
+
+func TestTranscribeWithFallbackPreservesLocalProcessStartCancellation(t *testing.T) {
+	keyPath := openAITestKey(t, "test-key", 0o600)
+	root := t.TempDir()
+	audioPath := filepath.Join(root, "clip.wav")
+	if err := os.WriteFile(audioPath, []byte("audio"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	useOpenAITestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusBadGateway)
+	})
+	local := models.Profile{ID: "local-base", Engine: "whisper.cpp", Command: "sleep 10"}
+	callbackErr := errors.New("controller cancelled local worker")
+	called := false
+	_, err := TranscribeWithFallback(
+		models.Profile{ID: "cloud", Engine: "openai", APIKeyFile: keyPath},
+		local, audioPath, filepath.Join(root, "raw.txt"), filepath.Join(root, "clean.txt"), time.Second,
+		func(pid int) error {
+			called = pid > 0
+			return callbackErr
+		},
+	)
+	if !called {
+		t.Fatal("fallback did not invoke onProcessStart")
+	}
+	if !errors.Is(err, callbackErr) {
+		t.Fatalf("error = %v, want callback cancellation", err)
+	}
+}
+
+func shellQuote(value string) string {
+	return "'" + strings.ReplaceAll(value, "'", "'\\''") + "'"
+}
+
+// Codex gpt-5.6-sol, xhigh, prompted by Robert Kirby
