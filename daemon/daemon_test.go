@@ -254,6 +254,40 @@ func TestGesturesReachTheToggleCommand(t *testing.T) {
 	}
 }
 
+func TestCtrlDoubleAltStartsAndStopsMeeting(t *testing.T) {
+	cfg := daemonConfig(t)
+	bin := t.TempDir()
+	argsLog := filepath.Join(bin, "args.log")
+	script := "#!/bin/sh\nprintf '[%s]\\n' \"$*\" >> " + argsLog + "\n"
+	command := filepath.Join(bin, "risper")
+	if err := os.WriteFile(command, []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	options := Options{MeetingCommand: command, Notify: func(config.Config, string, string) {}}
+
+	startMeetingToggle(cfg, options)
+	state := &recording.State{
+		SessionDir:   filepath.Join(cfg.SessionsDir, "meeting"),
+		RecorderPIDs: map[string]int{"mic": os.Getpid()},
+		Mode:         "meeting",
+	}
+	if err := files.AtomicWriteJSON(cfg.CurrentStatePath, state); err != nil {
+		t.Fatal(err)
+	}
+	startMeetingToggle(cfg, options)
+	time.Sleep(100 * time.Millisecond)
+
+	data, err := os.ReadFile(argsLog)
+	if err != nil {
+		t.Fatal(err)
+	}
+	lines := strings.Split(strings.TrimSpace(string(data)), "\n")
+	want := []string{"[meeting start]", "[meeting stop]"}
+	if len(lines) != len(want) || lines[0] != want[0] || lines[1] != want[1] {
+		t.Fatalf("meeting invocations = %#v, want %#v", lines, want)
+	}
+}
+
 func lastLine(text string) string {
 	lines := strings.Split(strings.TrimSpace(text), "\n")
 	return lines[len(lines)-1]

@@ -35,6 +35,7 @@ type Options struct {
 	VoiceListenerFactory func(cfg config.Config, onAction func(voice.Action)) voice.Listener
 	Notify               func(config.Config, string, string)
 	ToggleCommand        string
+	MeetingCommand       string
 	PruneInterval        time.Duration
 	RetryInterval        time.Duration
 }
@@ -55,6 +56,9 @@ func (options Options) withDefaults() Options {
 	}
 	if options.ToggleCommand == "" {
 		options.ToggleCommand = "risper-toggle"
+	}
+	if options.MeetingCommand == "" {
+		options.MeetingCommand = "risper"
 	}
 	if options.PruneInterval <= 0 {
 		options.PruneInterval = PruneInterval
@@ -113,6 +117,10 @@ func RunWithOptions(ctx context.Context, cfg config.Config, rawOptions Options) 
 			return
 		}
 		candidate := options.ListenerFactory(cfg.DoubleAltWindowMS, func(gesture hotkeys.Gesture) {
+			if gesture == hotkeys.GestureCtrlDoubleAlt {
+				startMeetingToggle(cfg, options)
+				return
+			}
 			startToggle(cfg, options, gesture)
 		})
 		if candidate == nil {
@@ -239,7 +247,7 @@ func pruneAudio(cfg config.Config) {
 	}
 }
 
-// toggleArgs maps a gesture onto the toggle command surface. Both gestures
+// toggleArgs maps a gesture onto the dictation toggle command surface. Both gestures
 // paste, because a transcript that only reaches the clipboard still needs a
 // keystroke to be useful; Shift adds the Return that submits it. Running
 // risper-toggle with no arguments stays clipboard-only, which is the escape
@@ -301,7 +309,29 @@ func startToggle(cfg config.Config, options Options, gesture hotkeys.Gesture) {
 }
 
 func startToggleArgs(cfg config.Config, options Options, source string, args []string, onDone func()) bool {
-	command := options.ToggleCommand
+	return startCommandArgs(cfg, options.ToggleCommand, source, args, onDone)
+}
+
+func startMeetingToggle(cfg config.Config, options Options) {
+	current, err := recording.Current(cfg)
+	if err != nil {
+		appendLog(cfg.LogPath, "ctrl-double-alt could not inspect recording: "+err.Error())
+		return
+	}
+	if current != nil && current.Mode != "meeting" {
+		message := "ctrl-double-alt ignored while ordinary dictation is recording"
+		appendLog(cfg.LogPath, message)
+		options.Notify(cfg, "⚠ Risper meeting shortcut ignored", "Stop ordinary dictation before starting meeting mode.")
+		return
+	}
+	action := "start"
+	if current != nil {
+		action = "stop"
+	}
+	startCommandArgs(cfg, options.MeetingCommand, "ctrl-double-alt", []string{"meeting", action}, nil)
+}
+
+func startCommandArgs(cfg config.Config, command, source string, args []string, onDone func()) bool {
 	path, err := exec.LookPath(command)
 	if err != nil {
 		if executable, executableErr := os.Executable(); executableErr == nil {

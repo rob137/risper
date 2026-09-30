@@ -120,14 +120,16 @@ risper-toggle && sleep 2 && risper-toggle --paste --enter
 
 Put the cursor in a text field before the second command of each pair. The
 transcript should appear there, and be submitted in the `--enter` case. Double
-Alt sends `--paste`; Shift double Alt sends both. `paste_confirmation` in `metadata.json` records
+Alt sends `--paste`; Shift double Alt sends both. Ctrl double Alt is reserved
+for meeting start/stop. `paste_confirmation` in `metadata.json` records
 whether the helper ran; nothing can confirm the target accepted the keys.
 
 Still environment-limited:
 
 - Confirming a paste actually reached the focused window.
 - A standalone tray indicator or recording window. Notifications and the GNOME microphone indicator are the current feedback path.
-- Double Alt unless `double_alt_enabled = true` and the daemon can read `/dev/input/event*`.
+- Double Alt and Ctrl double Alt unless `double_alt_enabled = true` and the
+  daemon can read `/dev/input/event*`.
 
 ## Optional OpenAI profile check
 
@@ -192,7 +194,8 @@ meeting. The second delta should not repeat the first. End deliberately:
 Expected:
 
 - Command checkpoints do not paste or end recording; after installation,
-  Double Alt and Shift Double Alt have the same safe routing.
+  Double Alt and Shift Double Alt have the same safe routing. Ctrl Double Alt
+  starts a meeting and the next Ctrl Double Alt stops it.
 - `meeting-slices/*.txt` contains the durable pieces; temporary slice audio is
   removed.
 - `transcript.clean.txt` contains the stitched meeting and any failed range is

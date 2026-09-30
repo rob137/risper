@@ -110,8 +110,8 @@ func TestShiftChangingBetweenTapsDoesNotTrigger(t *testing.T) {
 
 func TestOtherModifiersStillDiscardTheGesture(t *testing.T) {
 	detector := NewDetector(350 * time.Millisecond)
-	control := uint16(29)
-	detector.HandleKey("keyboard", control, true, 0)
+	meta := uint16(125)
+	detector.HandleKey("keyboard", meta, true, 0)
 	detector.HandleKey("keyboard", LeftAlt, true, 10*time.Millisecond)
 	if gesture, _ := detector.HandleKey("keyboard", LeftAlt, false, 20*time.Millisecond); gesture != GestureNone {
 		t.Fatal("ctrl+alt tap counted as a tap")
@@ -119,6 +119,35 @@ func TestOtherModifiersStillDiscardTheGesture(t *testing.T) {
 	detector.HandleKey("keyboard", LeftAlt, true, 100*time.Millisecond)
 	if gesture, _ := detector.HandleKey("keyboard", LeftAlt, false, 110*time.Millisecond); gesture != GestureNone {
 		t.Fatal("ctrl held triggered the gesture")
+	}
+}
+
+func ctrlTap(t *testing.T, detector *Detector, device string, alt uint16, at time.Duration) Gesture {
+	t.Helper()
+	detector.HandleKey(device, LeftCtrl, true, at)
+	detector.HandleKey(device, alt, true, at+5*time.Millisecond)
+	gesture, _ := detector.HandleKey(device, alt, false, at+10*time.Millisecond)
+	detector.HandleKey(device, LeftCtrl, false, at+15*time.Millisecond)
+	return gesture
+}
+
+func TestCtrlDoubleAltRequestsMeetingGesture(t *testing.T) {
+	detector := NewDetector(350 * time.Millisecond)
+	if ctrlTap(t, detector, "keyboard", LeftAlt, 0) != GestureNone {
+		t.Fatal("first ctrl tap triggered")
+	}
+	if ctrlTap(t, detector, "keyboard", LeftAlt, 100*time.Millisecond) != GestureCtrlDoubleAlt {
+		t.Fatal("second ctrl tap did not trigger meeting gesture")
+	}
+}
+
+func TestCtrlAndShiftTogetherAreDiscarded(t *testing.T) {
+	detector := NewDetector(350 * time.Millisecond)
+	detector.HandleKey("keyboard", LeftCtrl, true, 0)
+	detector.HandleKey("keyboard", LeftShift, true, 1*time.Millisecond)
+	detector.HandleKey("keyboard", LeftAlt, true, 5*time.Millisecond)
+	if gesture, _ := detector.HandleKey("keyboard", LeftAlt, false, 10*time.Millisecond); gesture != GestureNone {
+		t.Fatal("ctrl+shift tap triggered")
 	}
 }
 

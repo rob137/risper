@@ -273,6 +273,10 @@ Double Alt is an optional Linux input-event listener in `risper-daemon`, disable
 
 Double Alt runs `risper-toggle --paste`, which replays `paste_keys` into the focused window once the transcript is copied. Holding Shift across both taps runs `risper-toggle --paste --enter`, which follows the paste with Return. Both need `ydotoold`, and the target is whatever has focus when transcription finishes, not when the gesture was made.
 
+Holding Ctrl across both Alt taps runs `risper meeting start` when no recording
+is active, and `risper meeting stop` when meeting mode is active. It is the
+meeting-mode start/stop shortcut; Ctrl+Shift+double Alt remains ignored.
+
 Plain `risper-toggle` still only copies, so the GNOME custom shortcut remains the clipboard-only path.
 
 ## Meeting mode
@@ -292,6 +296,10 @@ also treated as a checkpoint: meeting mode never pastes or presses Return on
 its own. This makes the habitual gesture safe; only `risper meeting stop` ends
 the recording. Voice stop/send triggers are ignored during a meeting for the
 same reason.
+
+Ctrl Double Alt starts or stops meeting mode. The first gesture starts a
+meeting when no recording is active; the next Ctrl Double Alt stops that
+meeting and leaves the final delta on the clipboard.
 
 The background worker aims for five-minute slices by default and seeks the
 quietest 300 ms within ten seconds of each boundary. Slices below

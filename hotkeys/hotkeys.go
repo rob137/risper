@@ -10,29 +10,32 @@ const (
 	RightAlt   uint16 = 100
 	LeftShift  uint16 = 42
 	RightShift uint16 = 54
+	LeftCtrl   uint16 = 29
+	RightCtrl  uint16 = 97
 )
 
-// Gesture is the outcome of one key event. Shift is the only modifier allowed
-// to join the two Alt taps, and it distinguishes the two gestures rather than
-// discarding the second as a combination. What each one does is the daemon's
-// choice, not this package's.
+// Gesture is the outcome of one key event. Shift and Ctrl are the only
+// modifiers allowed to join the two Alt taps, and they distinguish the
+// gestures rather than discarding the second as a combination. What each one
+// does is the daemon's choice, not this package's.
 type Gesture int
 
 const (
 	GestureNone Gesture = iota
 	GestureDoubleAlt
 	GestureShiftDoubleAlt
+	GestureCtrlDoubleAlt
 )
 
 type deviceState struct {
-	keysDown       map[uint16]bool
-	candidate      uint16
-	candidateShift bool
-	polluted       bool
-	lastEvent      time.Duration
-	lastTap        time.Duration
-	lastTapShift   bool
-	hasLastTap     bool
+	keysDown      map[uint16]bool
+	candidate     uint16
+	candidateMods uint8
+	polluted      bool
+	lastEvent     time.Duration
+	lastTap       time.Duration
+	lastTapMods   uint8
+	hasLastTap    bool
 }
 
 // Detector recognizes two clean Alt taps on the same input device. The
@@ -73,31 +76,46 @@ func (detector *Detector) state(device string) *deviceState {
 
 func isAlt(key uint16) bool   { return key == LeftAlt || key == RightAlt }
 func isShift(key uint16) bool { return key == LeftShift || key == RightShift }
+func isCtrl(key uint16) bool  { return key == LeftCtrl || key == RightCtrl }
 
-// onlyShiftHeld reports that nothing except Shift is down, which is the
-// condition for both starting and completing a clean tap.
-func onlyShiftHeld(state *deviceState) bool {
+const (
+	modifierShift uint8 = 1 << iota
+	modifierCtrl
+)
+
+func modifierMask(state *deviceState) uint8 {
+	var mask uint8
 	for key := range state.keysDown {
-		if !isShift(key) {
+		switch {
+		case isShift(key):
+			mask |= modifierShift
+		case isCtrl(key):
+			mask |= modifierCtrl
+		}
+	}
+	return mask
+}
+
+// onlyGestureModifiersHeld reports that nothing except Shift or Ctrl is down,
+// which is the condition for starting and completing a clean tap. A later
+// validation rejects holding both modifiers together as an ambiguous gesture.
+func onlyGestureModifiersHeld(state *deviceState) bool {
+	for key := range state.keysDown {
+		if !isShift(key) && !isCtrl(key) {
 			return false
 		}
 	}
 	return true
 }
 
-func shiftHeld(state *deviceState) bool {
-	for key := range state.keysDown {
-		if isShift(key) {
-			return true
-		}
-	}
-	return false
+func validModifierMask(mask uint8) bool {
+	return mask == 0 || mask == modifierShift || mask == modifierCtrl
 }
 
 func reset(state *deviceState) {
 	state.keysDown = make(map[uint16]bool)
 	state.candidate = 0
-	state.candidateShift = false
+	state.candidateMods = 0
 	state.polluted = false
 }
 
@@ -120,7 +138,7 @@ func (detector *Detector) HandleKey(device string, key uint16, pressed bool, tim
 		reset(state)
 		state.hasLastTap = false
 		state.lastEvent = timestamp
-		if !pressed || (!isAlt(key) && !isShift(key)) {
+		if !pressed || (!isAlt(key) && !isShift(key) && !isCtrl(key)) {
 			return GestureNone, "double-alt state reset after stale input"
 		}
 		// An Alt press begins a new tap. A Shift press has to be recorded
@@ -135,12 +153,12 @@ func (detector *Detector) HandleKey(device string, key uint16, pressed bool, tim
 			return GestureNone, ""
 		}
 		switch {
-		case isAlt(key) && onlyShiftHeld(state):
+		case isAlt(key) && onlyGestureModifiersHeld(state):
 			state.candidate = key
-			state.candidateShift = shiftHeld(state)
+			state.candidateMods = modifierMask(state)
 			state.polluted = false
-		case isShift(key) && state.candidate == 0:
-			// Shift pressed before the taps is part of the paste variant.
+		case (isShift(key) || isCtrl(key)) && state.candidate == 0:
+			// A modifier pressed before the taps selects its gesture variant.
 		default:
 			state.polluted = true
 		}
@@ -150,44 +168,48 @@ func (detector *Detector) HandleKey(device string, key uint16, pressed bool, tim
 
 	delete(state.keysDown, key)
 	if !isAlt(key) || state.candidate != key {
-		if onlyShiftHeld(state) {
+		if onlyGestureModifiersHeld(state) {
 			state.candidate = 0
-			state.candidateShift = false
+			state.candidateMods = 0
 			state.polluted = false
 		}
 		return GestureNone, ""
 	}
 
-	pureTap := !state.polluted && onlyShiftHeld(state)
-	tapShift := state.candidateShift
+	pureTap := !state.polluted && onlyGestureModifiersHeld(state) && validModifierMask(state.candidateMods)
+	tapMods := state.candidateMods
 	state.candidate = 0
-	state.candidateShift = false
+	state.candidateMods = 0
 	state.polluted = false
 	if !pureTap {
 		state.hasLastTap = false
 		return GestureNone, "double-alt tap discarded: key combination was held"
 	}
 
-	shiftChanged := state.hasLastTap && tapShift != state.lastTapShift
-	if !state.hasLastTap || shiftChanged || timestamp < state.lastTap || timestamp-state.lastTap > detector.Window {
+	modifierChanged := state.hasLastTap && tapMods != state.lastTapMods
+	if !state.hasLastTap || modifierChanged || timestamp < state.lastTap || timestamp-state.lastTap > detector.Window {
 		firstTap := !state.hasLastTap
 		state.lastTap = timestamp
-		state.lastTapShift = tapShift
+		state.lastTapMods = tapMods
 		state.hasLastTap = true
 		switch {
 		case firstTap:
 			return GestureNone, "double-alt first tap"
-		case shiftChanged:
-			return GestureNone, "double-alt tap discarded: shift changed between taps"
+		case modifierChanged:
+			return GestureNone, "double-alt tap discarded: modifier changed between taps"
 		default:
 			return GestureNone, "double-alt tap outside window"
 		}
 	}
 	state.hasLastTap = false
-	if tapShift {
+	switch tapMods {
+	case modifierShift:
 		return GestureShiftDoubleAlt, "shift double-alt triggered"
+	case modifierCtrl:
+		return GestureCtrlDoubleAlt, "ctrl double-alt triggered"
+	default:
+		return GestureDoubleAlt, "double-alt triggered"
 	}
-	return GestureDoubleAlt, "double-alt triggered"
 }
 
 func (detector *Detector) handleOtherRelease(device string, key uint16, timestamp time.Duration) (Gesture, string) {
@@ -198,7 +220,7 @@ func (detector *Detector) handleOtherRelease(device string, key uint16, timestam
 	}
 	state.lastEvent = timestamp
 	delete(state.keysDown, key)
-	if onlyShiftHeld(state) && state.candidate == 0 {
+	if onlyGestureModifiersHeld(state) && state.candidate == 0 {
 		state.polluted = false
 	}
 	return GestureNone, ""

@@ -10,6 +10,8 @@ Current implementation:
 - It requires read access to input event devices, which normally needs explicit input-group or udev-rule setup.
 - It starts `risper-toggle --paste` when a clean double Alt tap is detected.
 - Holding Shift across both taps starts `risper-toggle --paste --enter` instead.
+- Holding Ctrl across both taps starts `risper meeting start` when idle and
+  runs `risper meeting stop` when meeting mode is active.
 - Plain `risper-toggle`, as bound to a GNOME custom shortcut, stays
   clipboard-only. That is the escape hatch for anywhere the configured paste
   keys do not work.
@@ -17,17 +19,19 @@ Current implementation:
 Correct double Alt semantics:
 
 - Count only Alt press and release with no other key participating.
-- Shift is the one exception: held before both Alt presses, it selects the
-  submitting variant rather than discarding the gesture.
+- Shift and Ctrl are the exceptions: held before both Alt presses, Shift
+  selects the submitting variant and Ctrl selects meeting start/stop.
+- Ctrl+Shift together remains an invalid combination.
 - Ignore Alt+Tab, Alt+F4, menu shortcuts, and other combinations.
 - Use a configurable double-tap window, default 350 ms.
 - Do not swallow or remap Alt globally without explicit approval.
 
 ## Pasting
 
-Both gestures finish the recording and then replay a paste into whatever window
-holds focus when transcription completes. Shift double Alt follows it with
-Return, which submits. That is usually seconds after the gesture, so the
+Plain and Shift double Alt finish dictation and then replay a paste into
+whatever window holds focus when transcription completes. Shift double Alt
+follows it with Return, which submits. Ctrl double Alt controls meeting mode
+and never pastes. That is usually seconds after the dictation gesture, so the
 transcript lands wherever the cursor is *then*, not where it was when Rob
 stopped talking. A stray double Alt therefore types into whatever is focused;
 only the Shift variant can send it.
