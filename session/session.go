@@ -37,6 +37,7 @@ type Metadata struct {
 	Errors                     []string                   `json:"errors"`
 	Language                   string                     `json:"language"`
 	Model                      string                     `json:"model"`
+	RecordingMode              string                     `json:"recording_mode,omitempty"`
 	PasteAttempted             *bool                      `json:"paste_attempted,omitempty"`
 	PasteConfirmation          string                     `json:"paste_confirmation,omitempty"`
 	PasteHelperSucceeded       *bool                      `json:"paste_helper_succeeded,omitempty"`
@@ -61,7 +62,8 @@ var knownMetadataKeys = map[string]struct{}{
 	"audio_path": {}, "audio_sources": {}, "audio_source_paths": {}, "audio_pruned_at": {}, "duration_seconds": {}, "ended_at": {},
 	"errors": {}, "language": {}, "model": {}, "paste_attempted": {}, "paste_confirmation": {},
 	"paste_helper_succeeded": {}, "paste_succeeded": {}, "session_id": {}, "session_type": {},
-	"started_at": {}, "status": {}, "target_app": {}, "transcript_clean_path": {}, "transcript_raw_path": {},
+	"recording_mode": {},
+	"started_at":     {}, "status": {}, "target_app": {}, "transcript_clean_path": {}, "transcript_raw_path": {},
 	"transcription_cost": {}, "transcription_currency": {}, "transcription_engine": {}, "transcription_rate_per_minute": {},
 }
 
@@ -142,6 +144,7 @@ func CreateAt(cfg config.Config, now time.Time) (*Metadata, error) {
 		Errors:               []string{},
 		Language:             cfg.Language,
 		Model:                cfg.Model,
+		RecordingMode:        "dictation",
 		PasteAttempted:       boolPtr(false),
 		PasteConfirmation:    "not_attempted",
 		PasteHelperSucceeded: boolPtr(false),

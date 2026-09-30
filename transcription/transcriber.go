@@ -57,13 +57,24 @@ func (err *TranscriptionFallbackError) Unwrap() []error {
 // The returned Profile is always the profile that produced Transcript. When
 // the fallback succeeds, PrimaryError retains the original OpenAI failure.
 func TranscribeWithFallback(primary, fallback models.Profile, audioPath, rawPath, cleanPath string, cloudAttemptBudget time.Duration, onProcessStart func(pid int) error) (TranscriptionResult, error) {
-	return TranscribeWithFallbackContext(context.Background(), primary, fallback, audioPath, rawPath, cleanPath, cloudAttemptBudget, onProcessStart)
+	return TranscribeWithFallbackAudioContext(context.Background(), primary, fallback, audioPath, audioPath, rawPath, cleanPath, cloudAttemptBudget, onProcessStart)
 }
 
 // TranscribeWithFallbackContext is the cancellable form of
 // TranscribeWithFallback. Cancellation of the parent context stops the cloud
 // request and is not treated as an invitation to start local work.
 func TranscribeWithFallbackContext(ctx context.Context, primary, fallback models.Profile, audioPath, rawPath, cleanPath string, cloudAttemptBudget time.Duration, onProcessStart func(pid int) error) (TranscriptionResult, error) {
+	return TranscribeWithFallbackAudioContext(ctx, primary, fallback, audioPath, audioPath, rawPath, cleanPath, cloudAttemptBudget, onProcessStart)
+}
+
+// TranscribeWithFallbackAudio lets callers upload a compact cloud encoding
+// while retaining a PCM WAV for whisper.cpp fallback. Ordinary dictation uses
+// one path for both through TranscribeWithFallback.
+func TranscribeWithFallbackAudio(primary, fallback models.Profile, primaryAudioPath, fallbackAudioPath, rawPath, cleanPath string, cloudAttemptBudget time.Duration, onProcessStart func(pid int) error) (TranscriptionResult, error) {
+	return TranscribeWithFallbackAudioContext(context.Background(), primary, fallback, primaryAudioPath, fallbackAudioPath, rawPath, cleanPath, cloudAttemptBudget, onProcessStart)
+}
+
+func TranscribeWithFallbackAudioContext(ctx context.Context, primary, fallback models.Profile, primaryAudioPath, fallbackAudioPath, rawPath, cleanPath string, cloudAttemptBudget time.Duration, onProcessStart func(pid int) error) (TranscriptionResult, error) {
 	if primary.Engine != "openai" {
 		return TranscriptionResult{}, fmt.Errorf("transcription fallback primary profile %q uses engine %q; want openai", primary.ID, primary.Engine)
 	}
@@ -79,7 +90,7 @@ func TranscribeWithFallbackContext(ctx context.Context, primary, fallback models
 	// Check the input before reading the key. If the recording cannot be
 	// opened, starting whisper.cpp would only produce a second misleading
 	// failure and would waste the user's time.
-	audio, err := os.Open(audioPath)
+	audio, err := os.Open(primaryAudioPath)
 	if err != nil {
 		return TranscriptionResult{}, &openAIInputError{err: fmt.Errorf("open audio for transcription fallback: %w", err)}
 	}
@@ -88,7 +99,7 @@ func TranscribeWithFallbackContext(ctx context.Context, primary, fallback models
 	}
 
 	attemptCtx, cancel := context.WithTimeout(ctx, cloudAttemptBudget)
-	transcript, primaryErr := transcribeOpenAIContext(attemptCtx, primary, audioPath, rawPath, cleanPath)
+	transcript, primaryErr := transcribeOpenAIContext(attemptCtx, primary, primaryAudioPath, rawPath, cleanPath)
 	cancel()
 	if primaryErr == nil {
 		return TranscriptionResult{Transcript: transcript, Profile: primary}, nil
@@ -97,7 +108,7 @@ func TranscribeWithFallbackContext(ctx context.Context, primary, fallback models
 		return TranscriptionResult{}, primaryErr
 	}
 
-	transcript, fallbackErr := Transcribe(fallback, audioPath, rawPath, cleanPath, onProcessStart)
+	transcript, fallbackErr := Transcribe(fallback, fallbackAudioPath, rawPath, cleanPath, onProcessStart)
 	if fallbackErr != nil {
 		return TranscriptionResult{}, &TranscriptionFallbackError{Primary: primaryErr, Fallback: fallbackErr}
 	}

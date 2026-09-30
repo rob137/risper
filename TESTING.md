@@ -158,4 +158,51 @@ should finish `complete`, and `events.jsonl` should contain
 `transcription.fallback`. Do not remove or alter the real key file for this
 check.
 
+## Manual meeting-mode check
+
+Do this from a review build rather than installing over the live desktop
+binary. For example, build one binary outside the checkout and invoke that
+same path for the whole trial:
+
+```bash
+go build -buildvcs=false -o /tmp/risper-meeting-review ./cmd/risper
+/tmp/risper-meeting-review meeting start
+```
+
+Speak and play some computer audio. Make two checkpoints with the review
+binary:
+
+```bash
+/tmp/risper-meeting-review meeting checkpoint
+```
+
+Do not use Double Alt for this checkout-only trial: the already-running daemon
+invokes the installed `risper-toggle`, not the review binary. Test the gesture
+only after the feature is deliberately installed, or from an isolated daemon
+whose toggle command resolves to the review build.
+
+After each command checkpoint, expect both `pw-record` processes to remain
+alive and the clipboard to contain a time-stamped delta, not the entire
+meeting. The second delta should not repeat the first. End deliberately:
+
+```bash
+/tmp/risper-meeting-review meeting stop
+```
+
+Expected:
+
+- Command checkpoints do not paste or end recording; after installation,
+  Double Alt and Shift Double Alt have the same safe routing.
+- `meeting-slices/*.txt` contains the durable pieces; temporary slice audio is
+  removed.
+- `transcript.clean.txt` contains the stitched meeting and any failed range is
+  an explicit gap.
+- `metadata.json` records `recording_mode` as `meeting`, status `complete`, and
+  estimated OpenAI cost for cloud-produced slices.
+- The final uncheckpointed delta is left on the clipboard and `audio.wav`
+  remains available under the normal retention policy.
+- `meeting-worker.log` is empty on a healthy run; `events.jsonl` contains
+  `meeting.started`, `meeting.slice`, `meeting.checkpoint`, and
+  `meeting.completed` boundaries.
+
 Codex gpt-5.6-sol, xhigh, prompted by Robert Kirby

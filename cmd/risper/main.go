@@ -9,6 +9,7 @@ import (
 	"github.com/rob137/risper/daemon"
 	"github.com/rob137/risper/diagnose"
 	"github.com/rob137/risper/history"
+	"github.com/rob137/risper/meeting"
 	"github.com/rob137/risper/models"
 	"github.com/rob137/risper/open"
 	"github.com/rob137/risper/pastecheck"
@@ -21,6 +22,9 @@ func main() {
 }
 
 func Main(args []string) int {
+	if len(args) == 2 && args[0] == "meeting-worker" {
+		return meeting.WorkerMain(args[1])
+	}
 	if len(args) == 0 {
 		return cli.Main(nil)
 	}
@@ -33,6 +37,8 @@ func Main(args []string) int {
 		return cli.Main(args)
 	case "toggle":
 		return toggle.Main(args[1:])
+	case "meeting":
+		return meeting.Main(args[1:])
 	case "daemon":
 		return daemon.Main()
 	case "history":
@@ -63,6 +69,7 @@ func printUsageTo(output *os.File) {
 	fmt.Fprintln(output)
 	fmt.Fprintln(output, "Service: start (default), kill, stop, restart, status")
 	fmt.Fprintln(output, "Dictation: toggle")
+	fmt.Fprintln(output, "Meetings: meeting start|checkpoint|stop|status")
 	fmt.Fprintln(output, "Daemon: daemon")
 	fmt.Fprintln(output, "Sessions: history, open, retranscribe")
 	fmt.Fprintln(output, "Models and diagnostics: models, benchmark, diagnose, paste-test")

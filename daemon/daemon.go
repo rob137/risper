@@ -287,6 +287,9 @@ func voiceActionAllowed(cfg config.Config, action voice.Action) (bool, string) {
 		if current == nil {
 			return false, "no recording is active"
 		}
+		if current.Mode == "meeting" {
+			return false, "meeting mode can only be stopped deliberately with risper meeting stop"
+		}
 	default:
 		return false, "unknown action"
 	}

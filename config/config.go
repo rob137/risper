@@ -38,6 +38,8 @@ voice_send_word = "tangerine"
 voice_trigger_profile = "whispercpp-base-en"
 voice_noise_gate_db = 10.0 # speech must exceed the rolling mic floor by this much
 voice_silence_ms = 400 # silence that ends one trigger utterance
+meeting_slice_seconds = 300 # background transcription target; cuts seek nearby silence
+meeting_silence_db = -50.0 # slices quieter than this are kept out of transcription
 audio_retention = "never" # never | <count>h | <count>d | <count>w; transcripts are always kept
 `
 
@@ -87,6 +89,8 @@ type Config struct {
 	VoiceTriggerProfile      string
 	VoiceNoiseGateDB         float64
 	VoiceSilenceMS           int
+	MeetingSliceSeconds      int
+	MeetingSilenceDB         float64
 	AudioRetentionSeconds    *float64
 }
 
@@ -109,6 +113,8 @@ type rawConfig struct {
 	VoiceTriggerProfile  string  `toml:"voice_trigger_profile"`
 	VoiceNoiseGateDB     float64 `toml:"voice_noise_gate_db"`
 	VoiceSilenceMS       int     `toml:"voice_silence_ms"`
+	MeetingSliceSeconds  int     `toml:"meeting_slice_seconds"`
+	MeetingSilenceDB     float64 `toml:"meeting_silence_db"`
 	AudioRetention       string  `toml:"audio_retention"`
 }
 
@@ -231,6 +237,8 @@ func Load() (Config, error) {
 		VoiceTriggerProfile: "whispercpp-base-en",
 		VoiceNoiseGateDB:    10,
 		VoiceSilenceMS:      400,
+		MeetingSliceSeconds: 300,
+		MeetingSilenceDB:    -50,
 		AudioRetention:      "never",
 	}
 	data, err := os.ReadFile(path)
@@ -267,6 +275,14 @@ func Load() (Config, error) {
 		voiceSilenceMS = 200
 	} else if voiceSilenceMS > 1500 {
 		voiceSilenceMS = 1500
+	}
+	meetingSliceSeconds := raw.MeetingSliceSeconds
+	if meetingSliceSeconds < 30 || meetingSliceSeconds > 600 {
+		meetingSliceSeconds = 300
+	}
+	meetingSilenceDB := raw.MeetingSilenceDB
+	if meetingSilenceDB < -80 || meetingSilenceDB > -20 {
+		meetingSilenceDB = -50
 	}
 	retention, hasRetention := ParseAudioRetention(raw.AudioRetention)
 
@@ -317,6 +333,8 @@ func Load() (Config, error) {
 		VoiceTriggerProfile:      voiceProfile,
 		VoiceNoiseGateDB:         noiseGateDB,
 		VoiceSilenceMS:           voiceSilenceMS,
+		MeetingSliceSeconds:      meetingSliceSeconds,
+		MeetingSilenceDB:         meetingSilenceDB,
 		AudioRetentionSeconds:    retentionPtr,
 	}, nil
 }

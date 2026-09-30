@@ -42,6 +42,7 @@ type State struct {
 	PartPaths       map[string]string `json:"part_paths"`
 	RecorderBackend string            `json:"recorder_backend"`
 	StartedAt       string            `json:"started_at"`
+	Mode            string            `json:"mode,omitempty"`
 }
 
 func SourcePath(audioPath string, source Source) string {
@@ -90,6 +91,16 @@ func Current(cfg config.Config) (*State, error) {
 }
 
 func Start(cfg config.Config) (*State, error) {
+	return StartMode(cfg, "dictation")
+}
+
+// StartMode starts the shared recorder with a durable mode marker. Dictation
+// remains the default; meeting mode uses the marker to turn the habitual
+// toggle gesture into a checkpoint rather than a destructive stop.
+func StartMode(cfg config.Config, mode string) (*State, error) {
+	if mode == "" {
+		mode = "dictation"
+	}
 	if current, err := Current(cfg); err != nil {
 		return nil, err
 	} else if current != nil {
@@ -112,6 +123,7 @@ func Start(cfg config.Config) (*State, error) {
 	}
 	metadata.AudioSources = []string{string(Mic), string(System)}
 	metadata.AudioSourcePaths = partPaths
+	metadata.RecordingMode = mode
 	if err := session.SaveMetadata(metadata); err != nil {
 		return nil, err
 	}
@@ -185,6 +197,7 @@ func Start(cfg config.Config) (*State, error) {
 		PartPaths:       partPaths,
 		RecorderBackend: "pw-record",
 		StartedAt:       metadata.StartedAt,
+		Mode:            mode,
 	}
 	if err := files.AtomicWriteJSON(cfg.CurrentStatePath, state); err != nil {
 		stopPIDs(pids)

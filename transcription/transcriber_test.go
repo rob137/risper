@@ -407,6 +407,36 @@ func TestTranscribeWithFallbackPreservesLocalProcessStartCancellation(t *testing
 	}
 }
 
+func TestTranscribeWithFallbackAudioUsesSeparateLocalInput(t *testing.T) {
+	keyPath := openAITestKey(t, "test-key", 0o600)
+	root := t.TempDir()
+	primaryAudio := filepath.Join(root, "slice.mp3")
+	fallbackAudio := filepath.Join(root, "slice.wav")
+	if err := os.WriteFile(primaryAudio, []byte("cloud encoding"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(fallbackAudio, []byte("local encoding"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	useOpenAITestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusServiceUnavailable)
+	})
+	raw := filepath.Join(root, "raw.txt")
+	clean := filepath.Join(root, "clean.txt")
+	primary := models.Profile{ID: "cloud", Engine: "openai", Model: "gpt-transcribe", APIKeyFile: keyPath}
+	fallback := models.Profile{
+		ID: "local", Engine: "whisper.cpp",
+		Command: "test \"{audio}\" = " + shellQuote(fallbackAudio) + " && printf local-words",
+	}
+	result, err := TranscribeWithFallbackAudio(primary, fallback, primaryAudio, fallbackAudio, raw, clean, time.Second, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.Transcript != "local-words" || result.Profile.ID != "local" || result.PrimaryError == nil {
+		t.Fatalf("result = %#v", result)
+	}
+}
+
 func shellQuote(value string) string {
 	return "'" + strings.ReplaceAll(value, "'", "'\\''") + "'"
 }

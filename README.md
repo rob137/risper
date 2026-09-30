@@ -11,6 +11,7 @@ voice-trigger listeners.
 
 - `risper`: enables autostart and starts the user daemon. `risper kill` stops it temporarily.
 - `risper toggle`: starts recording, stops it on the next run, or cancels an active transcription. Transcription includes the microphone and computer-output capture. `--paste` replays `paste_keys` into the focused window afterwards, and `--paste --enter` follows it with Return.
+- `risper meeting`: starts, checkpoints, stops, or reports the status of a long-running meeting recording. Checkpoints copy newly transcribed speech while recording continues.
 - `risper history`: lists recent sessions and opens, plays, copies, retranscribes, deletes, or prunes them.
 - `risper open`: opens recordings, the last session, the last transcript, the last audio file, or the config.
 - `risper retranscribe`: retranscribes a saved session from its mixed audio.
@@ -96,6 +97,8 @@ voice_send_word = "tangerine"
 voice_trigger_profile = "whispercpp-base-en"
 voice_noise_gate_db = 10.0
 voice_silence_ms = 400
+meeting_slice_seconds = 300
+meeting_silence_db = -50.0
 ```
 
 Model profiles live in:
@@ -241,6 +244,13 @@ Sessions are stored as:
 
 Every Go recording captures microphone and computer output separately, then blends the sources into `audio.wav`. Transcription always reads that mixed file, while `audio.mic.wav` and `audio.system.wav` remain available for a later re-read. If one source is silent, it is dropped from the mix, so it adds no transcription content or cost. Audio remains until `audio_retention` prunes it.
 
+Meeting sessions also contain `meeting.json`, `meeting-worker.log`, and a
+`meeting-slices/` directory of per-slice transcripts. Temporary WAV and MP3
+slice encodings are deleted after each attempt. The normal
+`transcript.clean.txt` and `transcript.raw.txt` paths are rewritten as the
+stitched transcript grows, so history, open, and retranscribe continue to use
+the ordinary session layout.
+
 `events.jsonl` is the structured debugging trail. It records workflow boundaries without storing full transcript text by default. Transcripts and metadata are retained indefinitely.
 
 Inspect the latest session without dumping transcript contents:
@@ -264,6 +274,38 @@ Double Alt is an optional Linux input-event listener in `risper-daemon`, disable
 Double Alt runs `risper-toggle --paste`, which replays `paste_keys` into the focused window once the transcript is copied. Holding Shift across both taps runs `risper-toggle --paste --enter`, which follows the paste with Return. Both need `ydotoold`, and the target is whatever has focus when transcription finishes, not when the gesture was made.
 
 Plain `risper-toggle` still only copies, so the GNOME custom shortcut remains the clipboard-only path.
+
+## Meeting mode
+
+Start and stop a meeting deliberately:
+
+```bash
+risper meeting start
+risper meeting status
+risper meeting stop
+```
+
+While it is active, `risper meeting checkpoint` or the normal Double Alt
+gesture transcribes the short remaining tail, copies only the delta since the
+previous checkpoint, and leaves both recorders running. Shift Double Alt is
+also treated as a checkpoint: meeting mode never pastes or presses Return on
+its own. This makes the habitual gesture safe; only `risper meeting stop` ends
+the recording. Voice stop/send triggers are ignored during a meeting for the
+same reason.
+
+The background worker aims for five-minute slices by default and seeks the
+quietest 300 ms within ten seconds of each boundary. Slices below
+`meeting_silence_db` are not sent to a transcription engine. OpenAI slices are
+uploaded as temporary 32 kbps MP3 files; whisper.cpp and an OpenAI profile's
+local fallback receive PCM WAV. The tail of the previous transcript is passed
+to OpenAI as context, without overlapping audio. Failed slices remain visible
+as explicit gaps in the stitched transcript.
+
+The selected profile is pinned by ID when the meeting starts. Do not remove or
+change that profile until the meeting ends. Risper still supports only one
+active recording, so ordinary dictation is unavailable while meeting mode is
+running. Checkpoints may wait behind a slice already being transcribed, and a
+checkpoint after a worker delay catches up in bounded slices before copying.
 
 Voice triggers are a separate optional Linux daemon listener. Set
 `voice_triggers_enabled = true` only after choosing three uncommon,

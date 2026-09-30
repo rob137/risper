@@ -9,6 +9,9 @@ import (
 
 	"github.com/rob137/risper/config"
 	"github.com/rob137/risper/events"
+	"github.com/rob137/risper/internal/files"
+	"github.com/rob137/risper/meeting"
+	"github.com/rob137/risper/recording"
 	"github.com/rob137/risper/session"
 )
 
@@ -320,6 +323,55 @@ command = "whisper-cli -f {audio} -nt -otxt -of {raw_no_txt}"
 	}
 	if !foundFallback {
 		t.Fatalf("fallback event missing: %#v", records)
+	}
+}
+
+func TestToggleMakesMeetingCheckpointWithoutStoppingOrPasting(t *testing.T) {
+	root, cfg := stubEnvironment(t)
+	recorder, err := recording.StartMode(cfg, "meeting")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if current, currentErr := recording.Current(cfg); currentErr == nil && current != nil {
+			_, _ = recording.Stop(cfg, current)
+		}
+	})
+	pcm := make([]byte, 44+2*16000*2)
+	copy(pcm, "RIFF")
+	for index := 44; index < len(pcm); index++ {
+		pcm[index] = 1
+	}
+	for _, path := range recorder.PartPaths {
+		if err := os.WriteFile(path, pcm, 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	meetingState := &meeting.State{
+		Version: 1, Status: "recording", SessionDir: recorder.SessionDir, ProfileID: "stub",
+		SliceSeconds: 30, SilenceDB: -80, StartedAt: recorder.StartedAt, Slices: []meeting.Slice{},
+	}
+	meetingPath := filepath.Join(recorder.SessionDir, "meeting.json")
+	if err := files.AtomicWriteJSON(meetingPath, meetingState); err != nil {
+		t.Fatal(err)
+	}
+
+	if code := Main([]string{"--paste", "--enter"}); code != 0 {
+		t.Fatalf("meeting checkpoint returned %d", code)
+	}
+	current, err := recording.Current(cfg)
+	if err != nil || current == nil || current.Mode != "meeting" {
+		t.Fatalf("meeting recorder after toggle = %#v, %v", current, err)
+	}
+	if got := readFile(t, filepath.Join(root, "clipboard.txt")); !strings.Contains(got, "phase two transcript") {
+		t.Fatalf("meeting checkpoint clipboard = %q", got)
+	}
+	if _, err := os.Stat(filepath.Join(root, "ydotool.log")); !os.IsNotExist(err) {
+		t.Fatalf("meeting checkpoint unexpectedly pasted: %v", err)
+	}
+	var saved meeting.State
+	if err := files.ReadJSON(meetingPath, &saved); err != nil || saved.LastCheckpointSlice != 1 {
+		t.Fatalf("meeting state = %#v, %v", saved, err)
 	}
 }
 

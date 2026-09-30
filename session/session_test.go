@@ -37,7 +37,7 @@ func TestCreateAtWritesFrozenSessionFilesAndEvent(t *testing.T) {
 			t.Errorf("missing %s: %v", name, err)
 		}
 	}
-	if metadata.SessionID != filepath.Base(dir) || metadata.Status != "recording" || metadata.EndedAt != nil {
+	if metadata.SessionID != filepath.Base(dir) || metadata.Status != "recording" || metadata.EndedAt != nil || metadata.RecordingMode != "dictation" {
 		t.Fatalf("unexpected metadata: %#v", metadata)
 	}
 	trail, err := os.ReadFile(EventsPath(metadata))

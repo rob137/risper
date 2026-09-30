@@ -14,6 +14,7 @@ import (
 	"github.com/rob137/risper/config"
 	"github.com/rob137/risper/desktop"
 	"github.com/rob137/risper/events"
+	"github.com/rob137/risper/meeting"
 	"github.com/rob137/risper/models"
 	"github.com/rob137/risper/recording"
 	"github.com/rob137/risper/session"
@@ -110,6 +111,14 @@ func Main(args []string) int {
 	if state, stateErr := recording.Current(cfg); stateErr != nil {
 		return fail(cfg, stateErr)
 	} else if state != nil {
+		if state.Mode == "meeting" {
+			// Double Alt is muscle memory. In meeting mode it must be safe: make
+			// a clipboard checkpoint and leave the long recording running.
+			if err := meeting.Checkpoint(cfg); err != nil {
+				return fail(cfg, err)
+			}
+			return 0
+		}
 		metadata, stopErr := recording.Stop(cfg, state)
 		if stopErr != nil {
 			return fail(cfg, stopErr)

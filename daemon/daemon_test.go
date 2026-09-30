@@ -12,7 +12,9 @@ import (
 
 	"github.com/rob137/risper/config"
 	"github.com/rob137/risper/hotkeys"
+	"github.com/rob137/risper/internal/files"
 	"github.com/rob137/risper/platforms"
+	"github.com/rob137/risper/recording"
 	"github.com/rob137/risper/session"
 	"github.com/rob137/risper/voice"
 )
@@ -189,6 +191,22 @@ func TestVoiceActionsMapToSafeToggleArguments(t *testing.T) {
 		if strings.Join(got, " ") != strings.Join(test.want, " ") {
 			t.Errorf("voiceToggleArgs(%v) = %#v, want %#v", test.action, got, test.want)
 		}
+	}
+}
+
+func TestVoiceStopCannotEndMeetingMode(t *testing.T) {
+	cfg := daemonConfig(t)
+	state := &recording.State{
+		SessionDir:   filepath.Join(cfg.SessionsDir, "meeting"),
+		RecorderPIDs: map[string]int{"mic": os.Getpid()},
+		Mode:         "meeting",
+	}
+	if err := files.AtomicWriteJSON(cfg.CurrentStatePath, state); err != nil {
+		t.Fatal(err)
+	}
+	allowed, reason := voiceActionAllowed(cfg, voice.ActionStop)
+	if allowed || !strings.Contains(reason, "meeting mode") {
+		t.Fatalf("voice stop allowed=%v reason=%q", allowed, reason)
 	}
 }
 
